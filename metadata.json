@@ -1,0 +1,6 @@
+{
+  "name": "THE VOICE LUNDA-SUL",
+  "description": "Plataforma oficial do concurso musical THE VOICE LUNDA-SUL - Inscrições, etapas, notícias, prémios e gestão administrativa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

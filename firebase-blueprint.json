@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "Candidate": {
+      "title": "Candidate",
+      "description": "Dados do candidato inscrito no The Voice Lunda-Sul",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "nomeCompleto": { "type": "string", "maxLength": 200 },
+        "nomeArtistico": { "type": "string", "maxLength": 100 },
+        "dataNascimento": { "type": "string", "maxLength": 30 },
+        "idade": { "type": "number" },
+        "sexo": { "type": "string", "enum": ["Masculino", "Feminino", "Outro"] },
+        "bi": { "type": "string", "maxLength": 30 },
+        "telefone": { "type": "string", "maxLength": 40 },
+        "whatsapp": { "type": "string", "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 120 },
+        "provincia": { "type": "string", "maxLength": 60 },
+        "municipio": { "type": "string", "maxLength": 60 },
+        "bairro": { "type": "string", "maxLength": 100 },
+        "generoMusical": { "type": "string", "maxLength": 80 },
+        "experienciaMusical": { "type": "string", "maxLength": 80 },
+        "instrumentos": { "type": "string", "maxLength": 200 },
+        "experienciaPalco": { "type": "string", "maxLength": 500 },
+        "biografia": { "type": "string", "maxLength": 2000 },
+        "motivacao": { "type": "string", "maxLength": 2000 },
+        "fotoUrl": { "type": "string", "maxLength": 2000 },
+        "codigoInscricao": { "type": "string", "maxLength": 40 },
+        "estado": { "type": "string", "enum": ["Recebida", "Em análise", "Aprovada", "Pré-seleccionada", "Eliminada", "Classificada"] },
+        "dataInscricao": { "type": "string", "maxLength": 50 },
+        "criadoEm": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["nomeCompleto", "nomeArtistico", "dataNascimento", "bi", "telefone", "email", "municipio", "codigoInscricao", "estado"]
+    },
+    "News": {
+      "title": "News",
+      "description": "Notícias e comunicados oficiais do evento",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "titulo": { "type": "string", "maxLength": 300 },
+        "resumo": { "type": "string", "maxLength": 600 },
+        "conteudo": { "type": "string", "maxLength": 10000 },
+        "imagemUrl": { "type": "string", "maxLength": 2000 },
+        "autor": { "type": "string", "maxLength": 100 },
+        "categoria": { "type": "string", "maxLength": 50 },
+        "dataPublicacao": { "type": "string", "maxLength": 50 },
+        "publicado": { "type": "boolean" },
+        "criadoEm": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["titulo", "resumo", "conteudo", "autor", "dataPublicacao", "publicado"]
+    },
+    "Evaluation": {
+      "title": "Evaluation",
+      "description": "Avaliação de candidato atribuída por membro do júri",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "candidatoId": { "type": "string", "maxLength": 128 },
+        "juradoId": { "type": "string", "maxLength": 128 },
+        "juradoNome": { "type": "string", "maxLength": 120 },
+        "tecnicaVocal": { "type": "number" },
+        "afinacao": { "type": "number" },
+        "presencaPalco": { "type": "number" },
+        "originalidade": { "type": "number" },
+        "interpretacao": { "type": "number" },
+        "potencialArtistico": { "type": "number" },
+        "pontuacaoTotal": { "type": "number" },
+        "media": { "type": "number" },
+        "observacoes": { "type": "string", "maxLength": 2000 },
+        "data": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["candidatoId", "juradoId", "pontuacaoTotal", "media"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Configurações gerais do evento The Voice Lunda-Sul",
+      "type": "object",
+      "properties": {
+        "nomeEvento": { "type": "string", "maxLength": 100 },
+        "slogan": { "type": "string", "maxLength": 200 },
+        "dataInicioInscricoes": { "type": "string", "maxLength": 50 },
+        "dataFimInscricoes": { "type": "string", "maxLength": 50 },
+        "idadeMinima": { "type": "number" },
+        "estadoInscricoes": { "type": "string", "maxLength": 30 }
+      }
+    }
+  },
+  "firestore": {
+    "/candidatos/{candidatoId}": {
+      "schema": "Candidate",
+      "description": "Coleção de todos os candidatos inscritos"
+    },
+    "/noticias/{noticiaId}": {
+      "schema": "News",
+      "description": "Coleção de notícias e comunicados"
+    },
+    "/avaliacoes/{avaliacaoId}": {
+      "schema": "Evaluation",
+      "description": "Coleção de avaliações do júri"
+    },
+    "/configuracoes/{configId}": {
+      "schema": "Settings",
+      "description": "Configuração central do evento"
+    }
+  }
+}

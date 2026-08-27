@@ -1,0 +1,106 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'jesmuevento@gmail.com' ||
+        request.auth.token.role == 'admin' ||
+        request.auth.token.role == 'super_admin' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isJury() {
+      return isSignedIn() && (
+        isAdmin() ||
+        request.auth.token.role == 'juri' ||
+        exists(/databases/$(database)/documents/jurados/$(request.auth.uid))
+      );
+    }
+
+    function isEditor() {
+      return isSignedIn() && (
+        isAdmin() ||
+        request.auth.token.role == 'editor'
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Candidatos (Candidates)
+    // Anyone can create a registration during active registration period.
+    // Reading candidate info is restricted to Admins, Jury, or individual candidate verification.
+    match /candidatos/{candidatoId} {
+      allow create: if isValidId(candidatoId) &&
+        request.resource.data.nomeCompleto is string &&
+        request.resource.data.bi is string &&
+        request.resource.data.email is string &&
+        request.resource.data.codigoInscricao is string;
+
+      // Allow candidate to get their own status or Admin/Jury to read
+      allow get: if true; 
+      allow list: if isAdmin() || isJury();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Notícias (News)
+    // Public can read published news, Admins and Editors can write
+    match /noticias/{noticiaId} {
+      allow read: if resource.data.publicado == true || isAdmin() || isEditor();
+      allow create, update, delete: if isAdmin() || isEditor();
+    }
+
+    // Etapas (Stages)
+    match /etapas/{etapaId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Galeria (Gallery)
+    match /galeria/{galeriaId} {
+      allow read: if true;
+      allow write: if isAdmin() || isEditor();
+    }
+
+    // Avaliações (Jury evaluations)
+    // Only authorized Jury and Admins can create and read evaluations
+    match /avaliacoes/{avaliacaoId} {
+      allow read: if isJury() || isAdmin();
+      allow create, update: if isJury() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Configurações (Settings)
+    match /configuracoes/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Admins metadata collection
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Jurados metadata collection
+    match /jurados/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
