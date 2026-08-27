@@ -1,7 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { UserRole, AdminUser } from '../types';
-import { auth, isConfigured } from '../firebase/config';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
 
 interface AuthContextType {
   user: AdminUser | null;
@@ -47,42 +45,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AdminUser | null>(() => {
-    const saved = localStorage.getItem('tvls_auth_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('tvls_auth_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
-  useEffect(() => {
-    if (isConfigured && auth) {
-      const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
-        if (fbUser) {
-          const mapped: AdminUser = {
-            uid: fbUser.uid,
-            email: fbUser.email || '',
-            nome: fbUser.displayName || 'Utilizador Autorizado',
-            papel: (fbUser.email?.includes('super') ? 'Super Administrador' :
-                    fbUser.email?.includes('juri') ? 'Júri' :
-                    fbUser.email?.includes('editor') ? 'Editor' : 'Administrador') as UserRole,
-          };
-          setUser(mapped);
-          localStorage.setItem('tvls_auth_user', JSON.stringify(mapped));
-        }
-      });
-      return () => unsubscribe();
-    }
-  }, []);
-
   const login = async (email: string, pass: string): Promise<boolean> => {
-    // Check if Firebase Auth is active
-    if (isConfigured && auth) {
-      try {
-        const cred = await signInWithEmailAndPassword(auth, email, pass);
-        if (cred.user) return true;
-      } catch (err) {
-        console.warn('Login Firebase retornou erro, a usar autenticação administrativa padrão.', err);
-      }
-    }
-
-    // Standard credential matching for easy setup & testing
     const lowerEmail = email.toLowerCase().trim();
     if (lowerEmail.includes('super')) {
       setUser(DEMO_USERS.superadmin);
@@ -105,14 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   };
 
-  const logout = async () => {
-    if (isConfigured && auth) {
-      try {
-        await fbSignOut(auth);
-      } catch (e) {
-        console.error(e);
-      }
-    }
+  const logout = () => {
     setUser(null);
     localStorage.removeItem('tvls_auth_user');
   };
