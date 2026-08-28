@@ -17,31 +17,62 @@ import {
   Sparkles,
   ChevronRight,
   MessageSquare,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { useEvent } from '../context/EventContext';
 import { Candidate, CandidateStatus } from '../types';
+import { findCandidateByCodeOrEmail } from '../firebase/services';
 
 export const CandidateArea: React.FC = () => {
-  const { candidates, evaluations } = useEvent();
+  const { candidates, evaluations, refreshData } = useEvent();
   const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
   const [candidate, setCandidate] = useState<Candidate | null>(null);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
-
     const query = searchQuery.trim().toLowerCase();
-    const found = candidates.find(
-      (c) =>
-        c.codigoInscricao.toLowerCase() === query ||
-        c.email.toLowerCase() === query ||
-        c.bi.toLowerCase() === query ||
-        c.telefone.replace(/\s+/g, '') === query.replace(/\s+/g, '')
-    );
+    if (!query) return;
 
-    setCandidate(found || null);
-    setSearched(true);
+    setSearching(true);
+    setSearched(false);
+
+    try {
+      // 1. Procurar em memória primeiro
+      let found = candidates.find(
+        (c) =>
+          c.codigoInscricao.toLowerCase() === query ||
+          c.email.toLowerCase() === query ||
+          c.bi.toLowerCase() === query ||
+          (c.bi && c.bi.toLowerCase().replace(/\s+/g, '') === query.replace(/\s+/g, '')) ||
+          (c.telefone && c.telefone.replace(/\D/g, '') === query.replace(/\D/g, '')) ||
+          (c.whatsapp && c.whatsapp.replace(/\D/g, '') === query.replace(/\D/g, '')) ||
+          c.nomeCompleto.toLowerCase().includes(query) ||
+          c.nomeArtistico.toLowerCase().includes(query)
+      );
+
+      // 2. Se não encontrar em memória ou para obter o registo mais recente da nuvem
+      if (!found) {
+        found = (await findCandidateByCodeOrEmail(searchQuery)) || undefined;
+      }
+
+      setCandidate(found || null);
+    } catch (err) {
+      console.warn('Erro ao consultar candidato:', err);
+      // Fallback em memória
+      const fallback = candidates.find(
+        (c) =>
+          c.codigoInscricao.toLowerCase() === query ||
+          c.email.toLowerCase() === query ||
+          c.bi.toLowerCase() === query
+      );
+      setCandidate(fallback || null);
+    } finally {
+      setSearching(false);
+      setSearched(true);
+    }
   };
 
   const getStatusBadge = (estado: CandidateStatus) => {
@@ -122,9 +153,17 @@ export const CandidateArea: React.FC = () => {
         </div>
         <button
           type="submit"
-          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-sky-600/30 transition-all whitespace-nowrap"
+          disabled={searching}
+          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-sky-600/30 transition-all whitespace-nowrap flex items-center justify-center gap-2 disabled:opacity-60"
         >
-          Consultar Estado
+          {searching ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>A Consultar...</span>
+            </>
+          ) : (
+            <span>Consultar Estado</span>
+          )}
         </button>
       </form>
 

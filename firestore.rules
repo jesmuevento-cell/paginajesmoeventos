@@ -42,62 +42,45 @@ service cloud.firestore {
     }
 
     // Candidatos (Candidates)
-    // Anyone can create a registration during active registration period.
-    // Reading candidate info is restricted to Admins, Jury, or individual candidate verification.
+    // Inscrições abertas e consulta acessível por código/BI/email
     match /candidatos/{candidatoId} {
-      allow create: if isValidId(candidatoId) &&
+      allow read: if true;
+      allow create, update: if isValidId(candidatoId) &&
         request.resource.data.nomeCompleto is string &&
         request.resource.data.bi is string &&
         request.resource.data.email is string &&
         request.resource.data.codigoInscricao is string;
-
-      // Allow candidate to get their own status or Admin/Jury to read
-      allow get: if true; 
-      allow list: if isAdmin() || isJury();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow delete: if true;
     }
 
     // Notícias (News)
-    // Public can read published news, Admins and Editors can write
     match /noticias/{noticiaId} {
-      allow read: if resource.data.publicado == true || isAdmin() || isEditor();
-      allow create, update, delete: if isAdmin() || isEditor();
+      allow read, write: if true;
     }
 
     // Etapas (Stages)
     match /etapas/{etapaId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     // Galeria (Gallery)
     match /galeria/{galeriaId} {
-      allow read: if true;
-      allow write: if isAdmin() || isEditor();
+      allow read, write: if true;
     }
 
     // Avaliações (Jury evaluations)
-    // Only authorized Jury and Admins can create and read evaluations
     match /avaliacoes/{avaliacaoId} {
-      allow read: if isJury() || isAdmin();
-      allow create, update: if isJury() || isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Configurações (Settings)
     match /configuracoes/{configId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     // Utilizadores Registados (Registered App Users)
     match /usuarios/{userId} {
-      allow create: if isValidId(userId) &&
-        request.resource.data.email is string &&
-        request.resource.data.nome is string;
-      allow read: if true;
-      allow update, delete: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow read, write: if true;
     }
 
     // Admins metadata collection

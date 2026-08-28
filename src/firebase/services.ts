@@ -72,7 +72,13 @@ export async function fetchCandidates(): Promise<Candidate[]> {
       const colRef = collection(db, 'candidatos');
       const snap = await getDocs(colRef);
       if (!snap.empty) {
-        const cloudData = snap.docs.map((d) => d.data() as Candidate);
+        const cloudData = snap.docs.map((d) => {
+          const data = d.data() as Candidate;
+          return {
+            ...data,
+            id: data.id || d.id,
+          };
+        });
         setLocal(STORAGE_KEYS.CANDIDATES, cloudData);
         return cloudData;
       }
@@ -109,40 +115,76 @@ export async function saveCandidate(candidate: Candidate): Promise<void> {
 }
 
 export async function findCandidateByCodeOrEmail(queryVal: string): Promise<Candidate | null> {
-  const clean = queryVal.trim().toUpperCase();
-  const cleanLower = queryVal.trim().toLowerCase();
+  const raw = (queryVal || '').trim();
+  if (!raw) return null;
 
-  // Firestore query direct
+  const clean = raw.toUpperCase();
+  const cleanLower = raw.toLowerCase();
+  const cleanDigits = raw.replace(/\D/g, '');
+
+  // 1. Tentar busca directa no Firestore
   if (db && isConfigured) {
     try {
       const colRef = collection(db, 'candidatos');
-      // Busca por código
+
+      // Busca directa pelo ID do documento
+      try {
+        const directDoc = await getDoc(doc(db, 'candidatos', raw));
+        if (directDoc.exists()) {
+          return directDoc.data() as Candidate;
+        }
+      } catch (e) {
+        // continue
+      }
+
+      // Busca por código exacto (ex: TVLS-2026-XXXX)
       const qCode = query(colRef, where('codigoInscricao', '==', clean), limit(1));
       const snapCode = await getDocs(qCode);
       if (!snapCode.empty) {
         return snapCode.docs[0].data() as Candidate;
       }
 
-      // Busca por email
+      // Busca por email em minúsculas
       const qEmail = query(colRef, where('email', '==', cleanLower), limit(1));
       const snapEmail = await getDocs(qEmail);
       if (!snapEmail.empty) {
         return snapEmail.docs[0].data() as Candidate;
+      }
+
+      // Busca por BI
+      const qBi = query(colRef, where('bi', '==', clean), limit(1));
+      const snapBi = await getDocs(qBi);
+      if (!snapBi.empty) {
+        return snapBi.docs[0].data() as Candidate;
       }
     } catch (err) {
       console.warn('Firestore findCandidateByCodeOrEmail query error:', err);
     }
   }
 
-  // Fallback local
+  // 2. Busca abrangente em toda a lista (Firestore + Local)
   const all = await fetchCandidates();
   return (
-    all.find(
-      (c) =>
-        c.codigoInscricao.toUpperCase() === clean ||
-        c.email.toLowerCase() === cleanLower ||
-        c.bi.toUpperCase() === clean
-    ) || null
+    all.find((c) => {
+      const candCode = (c.codigoInscricao || '').toUpperCase();
+      const candEmail = (c.email || '').toLowerCase();
+      const candBi = (c.bi || '').toUpperCase().replace(/\s+/g, '');
+      const candPhone = (c.telefone || '').replace(/\D/g, '');
+      const candWhats = (c.whatsapp || '').replace(/\D/g, '');
+      const candId = (c.id || '').toLowerCase();
+      const candName = (c.nomeCompleto || '').toLowerCase();
+      const candArt = (c.nomeArtistico || '').toLowerCase();
+
+      return (
+        candCode === clean ||
+        candCode.includes(clean) ||
+        candEmail === cleanLower ||
+        candBi === clean.replace(/\s+/g, '') ||
+        candId === cleanLower ||
+        (cleanDigits.length >= 6 && (candPhone.includes(cleanDigits) || candWhats.includes(cleanDigits))) ||
+        (cleanLower.length >= 4 && (candName.includes(cleanLower) || candArt.includes(cleanLower)))
+      );
+    }) || null
   );
 }
 

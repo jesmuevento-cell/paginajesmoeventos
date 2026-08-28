@@ -32,6 +32,7 @@ import {
   Phone,
   MapPin,
   Building,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useEvent } from '../context/EventContext';
@@ -61,7 +62,10 @@ export const Admin: React.FC = () => {
     deleteNews,
     saveAllStages,
     updateEventSettings,
+    refreshData,
   } = useEvent();
+
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
 
   // Screen toggle: Login vs Cadastro de Usuários
   const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
@@ -940,6 +944,21 @@ export const Admin: React.FC = () => {
                   <option value="Muconda">Muconda</option>
                 </select>
               </div>
+
+              <button
+                type="button"
+                disabled={isRefreshingData}
+                onClick={async () => {
+                  setIsRefreshingData(true);
+                  await refreshData();
+                  setIsRefreshingData(false);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                title="Sincronizar dados em tempo real com a base de dados Firestore"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingData ? 'animate-spin text-indigo-400' : ''}`} />
+                <span>{isRefreshingData ? 'A Sincronizar...' : 'Sincronizar'}</span>
+              </button>
             </div>
           </div>
 
