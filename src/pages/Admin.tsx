@@ -24,13 +24,30 @@ import {
   Star,
   Flame,
   UserCheck,
+  UserPlus,
+  KeyRound,
+  Lock,
+  Mail,
+  Key,
+  Phone,
+  MapPin,
+  Building,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useEvent } from '../context/EventContext';
 import { Candidate, NewsArticle, Stage, UserRole, CandidateStatus } from '../types';
 
 export const Admin: React.FC = () => {
-  const { user, isAuthenticated, login, logout, demoUsers } = useAuth();
+  const {
+    user,
+    isAuthenticated,
+    login,
+    logout,
+    demoUsers,
+    registerUser,
+    registeredUsers,
+    removeUser,
+  } = useAuth();
   const {
     candidates,
     stages,
@@ -46,15 +63,33 @@ export const Admin: React.FC = () => {
     updateEventSettings,
   } = useEvent();
 
-  // Navigation within Admin
+  // Screen toggle: Login vs Cadastro de Usuários
+  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
+
+  // Navigation within Admin Dashboard
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'candidates' | 'jury' | 'news' | 'stages' | 'settings'
+    'overview' | 'candidates' | 'jury' | 'news' | 'stages' | 'users' | 'settings'
   >('overview');
 
-  // Login form state
+  // Login form state & mode
+  const [loginMode, setLoginMode] = useState<'password' | 'email' | 'both'>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  // User Registration State (Cadastro de Usuário)
+  const [regForm, setRegForm] = useState({
+    nome: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    papel: 'Administrador' as UserRole,
+    telefone: '',
+    municipio: 'Saurimo',
+  });
+  const [regError, setRegError] = useState('');
+  const [regSuccess, setRegSuccess] = useState('');
+  const [regLoading, setRegLoading] = useState(false);
 
   // Candidates filter state
   const [candidateSearch, setCandidateSearch] = useState('');
@@ -97,9 +132,56 @@ export const Admin: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
-    const ok = await login(email, password);
-    if (!ok) {
-      setLoginError('Credenciais inválidas. Utilize as contas de demonstração disponíveis.');
+
+    let res = { success: false, message: '' };
+    if (loginMode === 'password') {
+      res = await login('', password);
+    } else if (loginMode === 'email') {
+      res = await login(email, '');
+    } else {
+      res = await login(email, password);
+    }
+
+    if (!res.success) {
+      setLoginError(res.message || 'Credenciais inválidas. Verifique os dados ou cadastre-se no sistema.');
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError('');
+    setRegSuccess('');
+
+    if (regForm.password !== regForm.confirmPassword) {
+      setRegError('As palavras-passe não coincidem. Por favor, confirme a sua palavra-passe.');
+      return;
+    }
+
+    if (regForm.password.length < 4) {
+      setRegError('A palavra-passe deve conter pelo menos 4 caracteres.');
+      return;
+    }
+
+    setRegLoading(true);
+    try {
+      const res = await registerUser({
+        nome: regForm.nome,
+        email: regForm.email,
+        password: regForm.password,
+        papel: regForm.papel,
+        telefone: regForm.telefone,
+        municipio: regForm.municipio,
+      });
+
+      if (!res.success) {
+        setRegError(res.message || 'Erro ao cadastrar utilizador.');
+      } else {
+        setRegSuccess('Utilizador cadastrado com sucesso! A entrar no sistema...');
+      }
+    } catch (err: any) {
+      setRegError(err.message || 'Ocorreu um erro ao registar a conta.');
+    } finally {
+      setRegLoading(false);
     }
   };
 
@@ -233,87 +315,380 @@ export const Admin: React.FC = () => {
   });
 
   // -------------------------------------------------------------
-  // LOGIN SCREEN
+  // AUTHENTICATION & REGISTRATION SCREEN
   // -------------------------------------------------------------
   if (!isAuthenticated) {
     return (
-      <div className="max-w-md mx-auto px-4 pt-32 pb-20 space-y-8">
+      <div className="max-w-md mx-auto px-4 pt-32 pb-20 space-y-6">
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center mx-auto shadow-lg">
-            <ShieldCheck className="w-7 h-7" />
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/30 to-purple-500/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/10">
+            {authScreen === 'login' ? <ShieldCheck className="w-7 h-7" /> : <UserPlus className="w-7 h-7 text-purple-400" />}
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white">Portal Administrativo</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-white">
+            {authScreen === 'login' ? 'Acesso Administrativo' : 'Cadastro de Utilizador'}
+          </h1>
           <p className="text-xs text-slate-400">
-            Acesso reservado aos membros da Comissão Organizadora, Júri e Editores do THE VOICE LUNDA-SUL.
+            {authScreen === 'login'
+              ? 'Aceda via palavra-passe, email autorizado ou seleccione um dos perfis oficiais.'
+              : 'Registe os seus dados no sistema do THE VOICE LUNDA-SUL 2026.'}
           </p>
         </div>
 
-        {/* Demo Fast Login Buttons */}
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 text-left">
-          <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider block">
-            Acesso Rápido de Demonstração:
-          </span>
-          <div className="grid grid-cols-1 gap-2">
-            {demoUsers.map((demo) => (
-              <button
-                key={demo.email}
-                type="button"
-                onClick={() => handleDemoLogin(demo)}
-                className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-xs transition-colors"
-              >
-                <div>
-                  <strong className="text-white block">{demo.nome}</strong>
-                  <span className="text-[10px] text-slate-400">{demo.email}</span>
-                </div>
-                <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 text-[10px] font-bold">
-                  {demo.papel}
-                </span>
-              </button>
-            ))}
-          </div>
+        {/* Main Tab Switch: Login vs Registo */}
+        <div className="grid grid-cols-2 gap-1 p-1 bg-slate-900 border border-slate-800 rounded-2xl">
+          <button
+            type="button"
+            onClick={() => {
+              setAuthScreen('login');
+              setLoginError('');
+              setRegError('');
+            }}
+            className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+              authScreen === 'login'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <KeyRound className="w-4 h-4" />
+            <span>Iniciar Sessão</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthScreen('register');
+              setLoginError('');
+              setRegError('');
+            }}
+            className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+              authScreen === 'register'
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Cadastrar Conta</span>
+          </button>
         </div>
 
-        {/* Credentials Form */}
-        <form
-          onSubmit={handleLogin}
-          className="rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-4 text-left shadow-2xl"
-        >
-          {loginError && (
-            <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{loginError}</span>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300">Email Administrativo</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-400"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-300">Palavra-passe</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-400"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all"
+        {/* ----------------- TELA DE CADASTRO ----------------- */}
+        {authScreen === 'register' ? (
+          <form
+            onSubmit={handleRegister}
+            className="rounded-3xl bg-slate-900 border border-purple-900/40 p-6 space-y-4 text-left shadow-2xl"
           >
-            Iniciar Sessão no Painel
-          </button>
-        </form>
+            <div className="border-b border-slate-800 pb-3">
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                Criar Nova Conta no Sistema
+              </h2>
+              <span className="text-[11px] text-slate-400">
+                Preencha os campos para acesso à comissão organizadora, júri ou gestão.
+              </span>
+            </div>
+
+            {regError && (
+              <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{regError}</span>
+              </div>
+            )}
+
+            {regSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{regSuccess}</span>
+              </div>
+            )}
+
+            {/* Nome Completo */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-purple-400" />
+                <span>Nome Completo *</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="ex: Dr. António Samucanda"
+                value={regForm.nome}
+                onChange={(e) => setRegForm({ ...regForm, nome: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
+              />
+            </div>
+
+            {/* Email de Acesso */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-sky-400" />
+                <span>Email de Acesso *</span>
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="ex: seunome@thevoicelundasul.ao ou gmail.com"
+                value={regForm.email}
+                onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
+              />
+            </div>
+
+            {/* Cargo / Papel */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Cargo / Função Oficial *</span>
+              </label>
+              <select
+                value={regForm.papel}
+                onChange={(e) => setRegForm({ ...regForm, papel: e.target.value as UserRole })}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-400"
+              >
+                <option value="Administrador">Comissão Organizadora / Administrador</option>
+                <option value="Júri">Membro do Júri Avaliador</option>
+                <option value="Editor">Comunicação, Redação & Imprensa</option>
+                <option value="Super Administrador">Super Administrador (Director Geral)</option>
+              </select>
+            </div>
+
+            {/* Telefone & Município */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Telefone</span>
+                </label>
+                <input
+                  type="tel"
+                  placeholder="+244 9..."
+                  value={regForm.telefone}
+                  onChange={(e) => setRegForm({ ...regForm, telefone: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Município</span>
+                </label>
+                <select
+                  value={regForm.municipio}
+                  onChange={(e) => setRegForm({ ...regForm, municipio: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-400"
+                >
+                  <option value="Saurimo">Saurimo</option>
+                  <option value="Cacolo">Cacolo</option>
+                  <option value="Dala">Dala</option>
+                  <option value="Muconda">Muconda</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Palavra-passe e Confirmação */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Palavra-passe *</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Mínimo 4 dígitos"
+                  value={regForm.password}
+                  onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Confirmar Senha *</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Repita a senha"
+                  value={regForm.confirmPassword}
+                  onChange={(e) => setRegForm({ ...regForm, confirmPassword: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={regLoading}
+              className="w-full py-3.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>{regLoading ? 'A Registar Conta...' : 'Concluir Cadastro e Entrar'}</span>
+            </button>
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => setAuthScreen('login')}
+                className="text-xs text-slate-400 hover:text-white underline"
+              >
+                Já tem conta cadastrada? Iniciar sessão
+              </button>
+            </div>
+          </form>
+        ) : (
+          /* ----------------- TELA DE LOGIN ----------------- */
+          <>
+            {/* Login Method Selector */}
+            <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMode('password');
+                  setLoginError('');
+                }}
+                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  loginMode === 'password'
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span>Por Senha</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMode('email');
+                  setLoginError('');
+                }}
+                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  loginMode === 'email'
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Mail className="w-3.5 h-3.5" />
+                <span>Por Email</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMode('both');
+                  setLoginError('');
+                }}
+                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  loginMode === 'both'
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Email + Senha</span>
+              </button>
+            </div>
+
+            {/* Credentials Form */}
+            <form
+              onSubmit={handleLogin}
+              className="rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-4 text-left shadow-2xl"
+            >
+              {loginError && (
+                <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{loginError}</span>
+                </div>
+              )}
+
+              {/* Email Input */}
+              {(loginMode === 'email' || loginMode === 'both') && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Email Cadastrado ou Autorizado</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="ex: superadmin@thevoicelundasul.ao"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+                  />
+                </div>
+              )}
+
+              {/* Password Input */}
+              {(loginMode === 'password' || loginMode === 'both') && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>{loginMode === 'password' ? 'Palavra-passe / Código de Acesso' : 'Palavra-passe'}</span>
+                    </label>
+                    {loginMode === 'password' && (
+                      <span className="text-[10px] text-slate-400">Padrão: <code className="text-indigo-300">admin</code></span>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    placeholder={loginMode === 'password' ? 'Digite "admin", "super2026", "juri2026"...' : '••••••••'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+                  />
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all"
+              >
+                {loginMode === 'password'
+                  ? 'Entrar com Senha'
+                  : loginMode === 'email'
+                  ? 'Entrar com Email'
+                  : 'Iniciar Sessão no Painel'}
+              </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => setAuthScreen('register')}
+                  className="text-xs text-purple-400 hover:text-purple-300 font-semibold"
+                >
+                  Novo por aqui? Cadastre um novo utilizador →
+                </button>
+              </div>
+            </form>
+
+            {/* Demo Fast Login Buttons */}
+            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 text-left">
+              <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider block">
+                Ou Aceda Directamente com 1-Clique:
+              </span>
+              <div className="grid grid-cols-1 gap-2">
+                {demoUsers.map((demo) => (
+                  <button
+                    key={demo.email}
+                    type="button"
+                    onClick={() => handleDemoLogin(demo)}
+                    className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-xs transition-colors group"
+                  >
+                    <div>
+                      <strong className="text-white block group-hover:text-sky-300 transition-colors">{demo.nome}</strong>
+                      <span className="text-[10px] text-slate-400">{demo.email}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 text-[10px] font-bold">
+                      {demo.papel}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -367,6 +742,7 @@ export const Admin: React.FC = () => {
           { id: 'jury', label: 'Avaliações do Júri', icon: Award },
           { id: 'news', label: 'Notícias & Imprensa', icon: Newspaper },
           { id: 'stages', label: 'Etapas do Concurso', icon: Calendar },
+          { id: 'users', label: `Utilizadores (${registeredUsers.length + demoUsers.length})`, icon: UserCheck },
           { id: 'settings', label: 'Configurações', icon: Settings },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -1079,6 +1455,125 @@ export const Admin: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ------------------ TAB: USERS ------------------ */}
+      {activeTab === 'users' && (
+        <div className="space-y-6 text-left">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-400" />
+                Gestão de Utilizadores e Contas de Acesso
+              </h3>
+              <p className="text-xs text-slate-400">
+                Lista de todos os administradores, jurados e utilizadores cadastrados no THE VOICE LUNDA-SUL.
+              </p>
+            </div>
+            <div className="px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold">
+              Total: {demoUsers.length + registeredUsers.length} contas
+            </div>
+          </div>
+
+          {/* Secção de Contas Cadastradas Pelos Utilizadores */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
+              <UserPlus className="w-4 h-4" />
+              Utilizadores Registados no Sistema ({registeredUsers.length})
+            </h4>
+
+            {registeredUsers.length === 0 ? (
+              <div className="p-8 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-3">
+                <Users className="w-10 h-10 text-slate-600 mx-auto" />
+                <p className="text-xs text-slate-400">
+                  Ainda não há utilizadores cadastrados pelo ecrã de registo. Novos utilizadores que se registarem aparecerão aqui instantaneamente.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {registeredUsers.map((u) => (
+                  <div
+                    key={u.uid}
+                    className="p-5 rounded-2xl bg-slate-900 border border-purple-900/40 flex flex-col justify-between gap-4 shadow-lg hover:border-purple-500/40 transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-purple-500/20 border border-purple-500/30 text-purple-300 flex items-center justify-center font-bold text-sm shrink-0">
+                          {u.nome.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <strong className="text-white text-sm block">{u.nome}</strong>
+                          <span className="text-xs text-slate-400 block">{u.email}</span>
+                          {u.telefone && (
+                            <span className="text-[11px] text-emerald-400 block">{u.telefone}</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-bold uppercase border border-purple-400/30">
+                        {u.papel}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-800/80 pt-3 text-[11px] text-slate-500">
+                      <span>Município: <strong className="text-slate-300">{u.municipio || 'Saurimo'}</strong></span>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Tem a certeza que deseja eliminar o utilizador "${u.nome}"?`)) {
+                            removeUser(u.uid);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-400 text-xs font-semibold flex items-center gap-1 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remover</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Secção de Contas Oficiais do Sistema */}
+          <div className="space-y-3 pt-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4" />
+              Contas & Perfis Oficiais Integrados ({demoUsers.length})
+            </h4>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {demoUsers.map((d) => (
+                <div
+                  key={d.email}
+                  className="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between gap-3 shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={d.avatarUrl}
+                        alt={d.name}
+                        className="w-11 h-11 rounded-xl object-cover border border-slate-700 shrink-0"
+                      />
+                      <div>
+                        <strong className="text-white text-sm block">{d.name}</strong>
+                        <span className="text-xs text-slate-400 block">{d.email}</span>
+                        <p className="text-[11px] text-slate-500 line-clamp-1">{d.desc}</p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-bold uppercase border border-indigo-400/30">
+                      {d.role}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-slate-800 pt-2.5 text-[11px] text-slate-400">
+                    <span>Palavra-passe padrão: <code className="text-indigo-300 font-mono">admin</code></span>
+                    <span className="text-emerald-400 font-semibold">Conta Activa</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

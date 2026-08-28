@@ -163,4 +163,19 @@ export interface AdminUser {
   nome: string;
   papel: UserRole;
   avatarUrl?: string;
+  telefone?: string;
+  municipio?: string;
+  criadoEm?: string;
+}
+
+export interface AppUser {
+  uid: string;
+  email: string;
+  nome: string;
+  telefone?: string;
+  municipio?: string;
+  papel: UserRole;
+  password?: string;
+  avatarUrl?: string;
+  criadoEm?: string;
 }

@@ -91,6 +91,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Utilizadores Registados (Registered App Users)
+    match /usuarios/{userId} {
+      allow create: if isValidId(userId) &&
+        request.resource.data.email is string &&
+        request.resource.data.nome is string;
+      allow read: if true;
+      allow update, delete: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+    }
+
     // Admins metadata collection
     match /admins/{userId} {
       allow read: if isSignedIn();

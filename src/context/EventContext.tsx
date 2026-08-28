@@ -11,6 +11,7 @@ import {
 import {
   fetchCandidates,
   saveCandidate,
+  deleteCandidate as deleteCandidateService,
   fetchNews,
   saveNewsItem,
   deleteNewsItem,
@@ -47,6 +48,7 @@ interface EventContextType {
   registerCandidate: (data: Omit<Candidate, 'id' | 'codigoInscricao' | 'estado' | 'dataInscricao' | 'criadoEm'>) => Promise<Candidate>;
   updateCandidateStatus: (id: string, newStatus: CandidateStatus, message?: string) => Promise<void>;
   updateCandidate: (candidate: Candidate) => Promise<void>;
+  deleteCandidate: (id: string) => Promise<void>;
   submitEvaluation: (evaluation: Omit<Evaluation, 'id' | 'data'>) => Promise<Evaluation>;
   addNewsItem: (news: Omit<NewsItem, 'id' | 'criadoEm'>) => Promise<void>;
   editNewsItem: (news: NewsItem) => Promise<void>;
@@ -110,7 +112,6 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const registerCandidate = async (
     data: Omit<Candidate, 'id' | 'codigoInscricao' | 'estado' | 'dataInscricao' | 'criadoEm'>
   ): Promise<Candidate> => {
-    // Generate unique random 5-digit number
     const randomCodeNum = Math.floor(10000 + Math.random() * 90000);
     const uniqueCode = `TVLS-2026-${randomCodeNum}`;
     const timestamp = new Date().toISOString();
@@ -165,6 +166,11 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const updateCandidate = async (candidate: Candidate) => {
     await saveCandidate(candidate);
     setCandidates((prev) => prev.map((c) => (c.id === candidate.id ? candidate : c)));
+  };
+
+  const deleteCandidate = async (id: string) => {
+    await deleteCandidateService(id);
+    setCandidates((prev) => prev.filter((c) => c.id !== id && c.codigoInscricao !== id));
   };
 
   const submitEvaluation = async (
@@ -251,6 +257,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         registerCandidate,
         updateCandidateStatus,
         updateCandidate,
+        deleteCandidate,
         submitEvaluation,
         addNewsItem,
         editNewsItem,
