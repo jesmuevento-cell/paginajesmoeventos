@@ -24,6 +24,7 @@ import {
 import { useEvent } from '../context/EventContext';
 import { Candidate } from '../types';
 import { CountdownTimer } from '../components/CountdownTimer';
+import { printCandidateDossier } from '../utils/printReceipt';
 
 interface RegistrationProps {
   setCurrentTab: (tab: string) => void;
@@ -223,7 +224,26 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
   };
 
   const printReceipt = () => {
-    window.print();
+    if (createdCandidate) {
+      printCandidateDossier({
+        codigoInscricao: createdCandidate.codigoInscricao,
+        nomeCompleto: createdCandidate.nomeCompleto,
+        nomeArtistico: createdCandidate.nomeArtistico,
+        bi: createdCandidate.bi,
+        telefone: createdCandidate.telefone,
+        email: createdCandidate.email,
+        municipio: createdCandidate.municipio,
+        generoMusical: createdCandidate.generoMusical,
+        experienciaMusical: createdCandidate.experienciaMusical,
+        biografia: createdCandidate.biografia,
+        motivacao: createdCandidate.motivacao,
+        dataInscricao: createdCandidate.dataInscricao || createdCandidate.dataCriacao,
+        estado: createdCandidate.estado,
+        pagamentoEstado: 'Aguardando Pagamento (5.000 KZ)',
+      });
+    } else {
+      window.print();
+    }
   };
 
   // SUCCESS CONFIRMATION SCREEN
@@ -280,8 +300,8 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
               <span className="text-white font-semibold">{createdCandidate.municipio}</span>
             </div>
             <div>
-              <span className="text-slate-400 block">Género Musical:</span>
-              <span className="text-white font-semibold">{createdCandidate.generoMusical}</span>
+              <span className="text-slate-400 block">Taxa Obrigatória:</span>
+              <span className="text-amber-400 font-mono font-bold">5.000 KZ</span>
             </div>
             <div>
               <span className="text-slate-400 block">N.º do BI:</span>
@@ -292,9 +312,19 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
               <span className="text-white font-semibold">{createdCandidate.telefone}</span>
             </div>
             <div>
-              <span className="text-slate-400 block">Estado Inicial:</span>
-              <span className="text-emerald-400 font-bold">{createdCandidate.estado}</span>
+              <span className="text-slate-400 block">Estado do Pagamento:</span>
+              <span className="text-amber-400 font-bold">Aguardando Pagamento</span>
             </div>
+          </div>
+
+          {/* Payment Notice Box */}
+          <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-left space-y-2">
+            <span className="text-xs font-bold text-amber-300 uppercase tracking-wider block">
+              Próximo Passo Obrigatório: Pagamento da Taxa (5.000 KZ)
+            </span>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Para validar a sua participação nas audições, efectue o pagamento de <strong>5.000 Kz</strong> e anexe o comprovativo na Área do Candidato utilizando o seu código <strong className="text-sky-400 font-mono">{createdCandidate.codigoInscricao}</strong>.
+            </p>
           </div>
 
           {/* Action Buttons */}
@@ -304,7 +334,7 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
               className="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-2 border border-slate-700"
             >
               <Printer className="w-4 h-4 text-sky-400" />
-              <span>Imprimir Comprovativo</span>
+              <span>Imprimir Ficha de Inscrição</span>
             </button>
 
             <button
@@ -312,9 +342,9 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
                 setCurrentTab('candidate-area');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="w-full sm:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-sky-600/30 flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-sky-500 to-blue-600 hover:from-amber-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-sky-600/30 flex items-center justify-center gap-2"
             >
-              <span>Ir para Área do Candidato</span>
+              <span>Efectuar Pagamento & Enviar Comprovativo</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -361,8 +391,28 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
           Formulário de Candidatura
         </h1>
         <p className="text-slate-300 text-sm sm:text-base max-w-xl mx-auto">
-          Preencha com rigor os seus dados pessoais e artísticos. A inscrição é gratuita e aberta a maiores de 18 anos residentes na Lunda-Sul.
+          Preencha com rigor os seus dados. A taxa de inscrição é de <strong className="text-white font-mono">5.000 KZ</strong> (valor fixo e obrigatório para validação da candidatura).
         </p>
+      </div>
+
+      {/* Banner de Taxa de Inscrição */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-sky-500/10 to-blue-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 text-left">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-400/40 flex items-center justify-center font-black shrink-0">
+            5K
+          </div>
+          <div>
+            <span className="text-xs font-bold text-amber-300 uppercase tracking-wider block">
+              VALOR DA INSCRIÇÃO: 5.000 KZ
+            </span>
+            <span className="text-xs text-slate-300">
+              O pagamento da inscrição é obrigatório para validação da candidatura.
+            </span>
+          </div>
+        </div>
+        <span className="px-3 py-1 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/30 text-xs font-mono font-bold whitespace-nowrap">
+          Taxa Única Fixa
+        </span>
       </div>
 
       {/* Countdown Timer */}

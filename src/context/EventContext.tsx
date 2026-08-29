@@ -7,6 +7,9 @@ import {
   EventSettings,
   Evaluation,
   CandidateStatus,
+  PaymentOrder,
+  PaymentMethodConfig,
+  PaymentProof,
 } from '../types';
 import {
   fetchCandidates,
@@ -26,6 +29,19 @@ import {
   saveSettings,
 } from '../firebase/services';
 import {
+  fetchPaymentOrders,
+  fetchPaymentMethods,
+  savePaymentOrder,
+  savePaymentMethods,
+  submitPaymentProof as submitPaymentProofService,
+  confirmPayment as confirmPaymentService,
+  rejectPayment as rejectPaymentService,
+  cancelPayment as cancelPaymentService,
+  createOrderObject,
+  INITIAL_PAYMENT_METHODS,
+  REGISTRATION_FEE,
+} from '../services/paymentService';
+import {
   INITIAL_SETTINGS,
   INITIAL_STAGES,
   INITIAL_CANDIDATES,
@@ -41,11 +57,13 @@ interface EventContextType {
   news: NewsItem[];
   gallery: GalleryItem[];
   evaluations: Evaluation[];
+  paymentOrders: PaymentOrder[];
+  paymentMethods: PaymentMethodConfig[];
   loading: boolean;
   isRegistrationOpen: boolean;
   isRegistrationEnded: boolean;
   isRegistrationPending: boolean;
-  registerCandidate: (data: Omit<Candidate, 'id' | 'codigoInscricao' | 'estado' | 'dataInscricao' | 'criadoEm'>) => Promise<Candidate>;
+  registerCandidate: (data: Omit<Candidate, 'id' | 'codigoInscricao' | 'estado' | 'dataInscricao' | 'criadoEm'>) => Promise<{ candidate: Candidate; paymentOrder: PaymentOrder }>;
   updateCandidateStatus: (id: string, newStatus: CandidateStatus, message?: string) => Promise<void>;
   updateCandidate: (candidate: Candidate) => Promise<void>;
   deleteCandidate: (id: string) => Promise<void>;
@@ -57,6 +75,21 @@ interface EventContextType {
   deleteGalleryMedia: (id: string) => Promise<void>;
   saveAllStages: (updatedStages: Stage[]) => Promise<void>;
   updateEventSettings: (newSettings: EventSettings) => Promise<void>;
+  submitPaymentProof: (orderId: string, proofData: {
+    comprovativoUrl: string;
+    comprovativoNomeArquivo?: string;
+    comprovativoTamanho?: number;
+    dataPagamentoInformada: string;
+    metodoUtilizado: string;
+    nomePagador?: string;
+    numeroTransacao?: string;
+    observacoes?: string;
+  }) => Promise<PaymentOrder>;
+  confirmPayment: (orderId: string, admin: { uid: string; nome: string }) => Promise<{ order: PaymentOrder; receiptCode: string }>;
+  rejectPayment: (orderId: string, motivo: string, admin: { uid: string; nome: string }) => Promise<PaymentOrder>;
+  cancelPayment: (orderId: string, motivo: string, admin: { uid: string; nome: string }) => Promise<PaymentOrder>;
+  updatePaymentMethodsList: (methods: PaymentMethodConfig[]) => Promise<void>;
+  getPaymentOrderByCode: (code: string) => PaymentOrder | undefined;
   refreshData: () => Promise<void>;
 }
 
@@ -69,18 +102,22 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [news, setNews] = useState<NewsItem[]>(INITIAL_NEWS);
   const [gallery, setGallery] = useState<GalleryItem[]>(INITIAL_GALLERY);
   const [evaluations, setEvaluations] = useState<Evaluation[]>(INITIAL_EVALUATIONS);
+  const [paymentOrders, setPaymentOrders] = useState<PaymentOrder[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(INITIAL_PAYMENT_METHODS);
   const [loading, setLoading] = useState(true);
 
   const loadAll = async () => {
     try {
       setLoading(true);
-      const [st, cands, nws, gal, evals, sets] = await Promise.all([
+      const [st, cands, nws, gal, evals, sets, orders, methods] = await Promise.all([
         fetchStages(),
         fetchCandidates(),
         fetchNews(),
         fetchGallery(),
         fetchEvaluations(),
         fetchSettings(),
+        fetchPaymentOrders(),
+        fetchPaymentMethods(),
       ]);
       setStages(st);
       setCandidates(cands);
@@ -88,6 +125,25 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setGallery(gal);
       setEvaluations(evals);
       setSettings(sets);
+      setPaymentMethods(methods);
+
+      // Sincronizar ordens para candidatos existentes que não tinham ordem criada
+      let syncdOrders = [...orders];
+      const missingOrders: PaymentOrder[] = [];
+      for (const cand of cands) {
+        const hasOrder = syncdOrders.some(
+          (o) => o.codigoInscricao === cand.codigoInscricao || o.candidatoId === cand.id
+        );
+        if (!hasOrder) {
+          const autoOrder = createOrderObject(cand);
+          missingOrders.push(autoOrder);
+          savePaymentOrder(autoOrder).catch(() => {});
+        }
+      }
+      if (missingOrders.length > 0) {
+        syncdOrders = [...missingOrders, ...syncdOrders];
+      }
+      setPaymentOrders(syncdOrders);
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
     } finally {
@@ -111,8 +167,8 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const registerCandidate = async (
     data: Omit<Candidate, 'id' | 'codigoInscricao' | 'estado' | 'dataInscricao' | 'criadoEm'>
-  ): Promise<Candidate> => {
-    const randomCodeNum = Math.floor(10000 + Math.random() * 90000);
+  ): Promise<{ candidate: Candidate; paymentOrder: PaymentOrder }> => {
+    const randomCodeNum = Math.floor(100000 + Math.random() * 900000);
     const uniqueCode = `TVLS-2026-${randomCodeNum}`;
     const timestamp = new Date().toISOString();
     const formattedDate = new Date().toLocaleString('pt-AO', {
@@ -130,15 +186,30 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       estado: 'Recebida',
       etapaActual: 'Inscrições Oficiais',
       mensagensOrganizacao: [
-        'A sua inscrição no THE VOICE LUNDA-SUL foi submetida com sucesso. Guarde o seu código de inscrição para consultar o estado e convocações.',
+        'A sua inscrição no THE VOICE LUNDA-SUL foi submetida com sucesso. Efectue o pagamento de 5.000 Kz e envie o comprovativo para validação oficial.',
       ],
       dataInscricao: formattedDate,
       criadoEm: timestamp,
+      ordemPagamentoId: `PAY-${uniqueCode}`,
+      pagamento: {
+        ordemId: `PAY-${uniqueCode}`,
+        estado: 'AGUARDANDO PAGAMENTO',
+        valor: REGISTRATION_FEE,
+      },
     };
 
-    await saveCandidate(newCandidate);
+    // 1. Criar Ordem de Pagamento associada
+    const order = createOrderObject(newCandidate);
+
+    await Promise.all([
+      saveCandidate(newCandidate),
+      savePaymentOrder(order),
+    ]);
+
     setCandidates((prev) => [newCandidate, ...prev]);
-    return newCandidate;
+    setPaymentOrders((prev) => [order, ...prev]);
+
+    return { candidate: newCandidate, paymentOrder: order };
   };
 
   const updateCandidateStatus = async (
@@ -241,6 +312,134 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setSettings(newSettings);
   };
 
+  // Pagamentos - Ações
+  const submitPaymentProof = async (
+    orderId: string,
+    proofData: {
+      comprovativoUrl: string;
+      comprovativoNomeArquivo?: string;
+      comprovativoTamanho?: number;
+      dataPagamentoInformada: string;
+      metodoUtilizado: string;
+      nomePagador?: string;
+      numeroTransacao?: string;
+      observacoes?: string;
+    }
+  ): Promise<PaymentOrder> => {
+    const updated = await submitPaymentProofService(orderId, proofData);
+    setPaymentOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)));
+
+    // Atualizar candidato em memória
+    setCandidates((prev) =>
+      prev.map((c) => {
+        if (c.codigoInscricao === updated.codigoInscricao || c.id === updated.candidatoId) {
+          const updatedCand: Candidate = {
+            ...c,
+            pagamento: {
+              ordemId: updated.id,
+              estado: updated.estado,
+              valor: updated.valor,
+            },
+          };
+          saveCandidate(updatedCand).catch(() => {});
+          return updatedCand;
+        }
+        return c;
+      })
+    );
+
+    return updated;
+  };
+
+  const confirmPayment = async (
+    orderId: string,
+    admin: { uid: string; nome: string }
+  ): Promise<{ order: PaymentOrder; receiptCode: string }> => {
+    const res = await confirmPaymentService(orderId, admin);
+    setPaymentOrders((prev) => prev.map((o) => (o.id === orderId ? res.order : o)));
+
+    // Atualizar candidato para Aprovada / Validada
+    setCandidates((prev) =>
+      prev.map((c) => {
+        if (c.codigoInscricao === res.order.codigoInscricao || c.id === res.order.candidatoId) {
+          const updatedCand: Candidate = {
+            ...c,
+            estado: 'Aprovada',
+            pagamento: {
+              ordemId: res.order.id,
+              estado: 'PAGO E CONFIRMADO',
+              valor: res.order.valor,
+              dataConfirmacao: res.order.confirmadoPor?.dataHora,
+              codigoConfirmacao: res.receiptCode,
+            },
+            mensagensOrganizacao: [
+              ...(c.mensagensOrganizacao || []),
+              `Pagamento de 5.000 Kz confirmado por ${admin.nome}. Inscrição validada com sucesso! Recibo: ${res.receiptCode}`,
+            ],
+          };
+          saveCandidate(updatedCand).catch(() => {});
+          return updatedCand;
+        }
+        return c;
+      })
+    );
+
+    return res;
+  };
+
+  const rejectPayment = async (
+    orderId: string,
+    motivo: string,
+    admin: { uid: string; nome: string }
+  ): Promise<PaymentOrder> => {
+    const updated = await rejectPaymentService(orderId, motivo, admin);
+    setPaymentOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)));
+
+    setCandidates((prev) =>
+      prev.map((c) => {
+        if (c.codigoInscricao === updated.codigoInscricao || c.id === updated.candidatoId) {
+          const updatedCand: Candidate = {
+            ...c,
+            pagamento: {
+              ordemId: updated.id,
+              estado: 'PAGAMENTO REJEITADO',
+              valor: updated.valor,
+            },
+            mensagensOrganizacao: [
+              ...(c.mensagensOrganizacao || []),
+              `Atenção: O comprovativo de pagamento foi rejeitado. Motivo: ${motivo}. Por favor, envie um novo comprovativo válido.`,
+            ],
+          };
+          saveCandidate(updatedCand).catch(() => {});
+          return updatedCand;
+        }
+        return c;
+      })
+    );
+
+    return updated;
+  };
+
+  const cancelPayment = async (
+    orderId: string,
+    motivo: string,
+    admin: { uid: string; nome: string }
+  ): Promise<PaymentOrder> => {
+    const updated = await cancelPaymentService(orderId, motivo, admin);
+    setPaymentOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)));
+    return updated;
+  };
+
+  const updatePaymentMethodsList = async (methods: PaymentMethodConfig[]) => {
+    const saved = await savePaymentMethods(methods);
+    setPaymentMethods(saved);
+  };
+
+  const getPaymentOrderByCode = (code: string): PaymentOrder | undefined => {
+    const clean = (code || '').trim().toUpperCase();
+    return paymentOrders.find((o) => (o.codigoInscricao || '').toUpperCase() === clean);
+  };
+
   return (
     <EventContext.Provider
       value={{
@@ -250,6 +449,8 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         news,
         gallery,
         evaluations,
+        paymentOrders,
+        paymentMethods,
         loading,
         isRegistrationOpen,
         isRegistrationEnded,
@@ -266,6 +467,12 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         deleteGalleryMedia,
         saveAllStages,
         updateEventSettings,
+        submitPaymentProof,
+        confirmPayment,
+        rejectPayment,
+        cancelPayment,
+        updatePaymentMethodsList,
+        getPaymentOrderByCode,
         refreshData: loadAll,
       }}
     >
@@ -281,3 +488,4 @@ export const useEvent = () => {
   }
   return context;
 };
+

@@ -170,45 +170,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, message: 'Conta cadastrada com sucesso!' };
   };
 
-  // Login flexível por Email ou Email + Senha
-  const login = async (emailInput: string, passInput: string = ''): Promise<{ success: boolean; message?: string }> => {
-    const lower = (emailInput || '').toLowerCase().trim();
-    const pass = (passInput || '').trim();
+  // Login estrito por Email + Senha Cadastrada
+  const login = async (emailInput: string, passInput: string): Promise<{ success: boolean; message?: string }> => {
+    const cleanEmail = (emailInput || '').toLowerCase().trim();
+    const cleanPass = (passInput || '').trim();
 
-    // Se inseriu apenas senha no campo de login direto
-    if (!lower && pass) {
-      return loginWithPasswordOnly(pass);
+    if (!cleanEmail || !cleanPass) {
+      return { success: false, message: 'Por favor, insira o seu endereço de email e a palavra-passe.' };
     }
 
-    // 1. Procurar nas contas de demonstração conhecidas
-    const matchedDemo = DEMO_ACCOUNTS.find(
-      (d) =>
-        d.email.toLowerCase() === lower ||
-        lower === d.role.toLowerCase() ||
-        (lower.includes('super') && d.role === 'Super Administrador') ||
-        (lower.includes('juri') && d.role === 'Júri') ||
-        (lower.includes('editor') && d.role === 'Editor')
-    );
-
-    if (matchedDemo) {
-      if (pass && pass.toLowerCase() !== matchedDemo.password.toLowerCase() && pass.toLowerCase() !== matchedDemo.masterPin?.toLowerCase() && pass !== 'admin') {
-        return { success: false, message: 'Palavra-passe incorreta para esta conta.' };
-      }
-
-      setUserSession({
-        uid: `uid-${matchedDemo.role.toLowerCase().replace(/\s+/g, '-')}`,
-        email: matchedDemo.email,
-        nome: matchedDemo.name,
-        papel: matchedDemo.role,
-        avatarUrl: matchedDemo.avatarUrl,
-      });
-      return { success: true };
-    }
-
-    // 2. Procurar na base de utilizadores registados (Firestore + Local)
-    const customUser = await findUserByEmail(lower);
+    // 1. Procurar na base de utilizadores registados (Firestore + Local)
+    const customUser = await findUserByEmail(cleanEmail);
     if (customUser) {
-      if (pass && customUser.password && customUser.password !== pass) {
+      if (customUser.password && customUser.password !== cleanPass) {
         return { success: false, message: 'Palavra-passe incorreta para este email.' };
       }
 
@@ -225,126 +199,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     }
 
-    // 3. Se forneceu email válido no formato institucional
-    if (lower.includes('@') && lower.length > 5) {
-      const role: UserRole = lower.includes('juri')
-        ? 'Júri'
-        : lower.includes('editor') || lower.includes('imprensa')
-        ? 'Editor'
-        : lower.includes('super')
-        ? 'Super Administrador'
-        : 'Administrador';
+    // 2. Procurar nas contas oficiais do sistema
+    const matchedDemo = DEMO_ACCOUNTS.find(
+      (d) => d.email.toLowerCase() === cleanEmail
+    );
+
+    if (matchedDemo) {
+      if (
+        cleanPass !== matchedDemo.password &&
+        cleanPass !== matchedDemo.masterPin &&
+        cleanPass !== 'admin'
+      ) {
+        return { success: false, message: 'Palavra-passe incorreta para este email.' };
+      }
 
       setUserSession({
-        uid: `uid-user-${Date.now()}`,
-        email: lower,
-        nome: lower.split('@')[0].toUpperCase(),
-        papel: role,
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        uid: `uid-${matchedDemo.role.toLowerCase().replace(/\s+/g, '-')}`,
+        email: matchedDemo.email,
+        nome: matchedDemo.name,
+        papel: matchedDemo.role,
+        avatarUrl: matchedDemo.avatarUrl,
       });
       return { success: true };
     }
 
-    // 4. Fallback se forneceu código/senha
-    if (lower.length >= 3) {
-      return loginWithPasswordOnly(lower);
-    }
-
-    return { success: false, message: 'Utilizador não encontrado. Verifique os dados ou crie uma conta.' };
+    return {
+      success: false,
+      message: 'Utilizador não encontrado. Verifique o email digitado ou cadastre uma nova conta.',
+    };
   };
 
-  // Login exclusivo por Senha / Código de Acesso
+  // Funções de compatibilidade
   const loginWithPasswordOnly = async (passwordInput: string): Promise<{ success: boolean; message?: string }> => {
-    const p = (passwordInput || '').trim().toLowerCase();
-
-    if (!p) return { success: false, message: 'Digite a sua palavra-passe ou PIN de acesso.' };
-
-    // Senhas especiais do Super Admin
-    if (p === 'admin' || p === 'superadmin' || p === 'super2026' || p === 'thevoice2026' || p === '123456') {
-      const demo = DEMO_ACCOUNTS[0]; // Super Administrador
-      setUserSession({
-        uid: 'uid-superadmin',
-        email: demo.email,
-        nome: demo.name,
-        papel: 'Super Administrador',
-        avatarUrl: demo.avatarUrl,
-      });
-      return { success: true };
-    }
-
-    // Senhas de Administrador
-    if (p === 'admin2026' || p === 'organizacao' || p === 'comissao') {
-      const demo = DEMO_ACCOUNTS[1];
-      setUserSession({
-        uid: 'uid-admin',
-        email: demo.email,
-        nome: demo.name,
-        papel: 'Administrador',
-        avatarUrl: demo.avatarUrl,
-      });
-      return { success: true };
-    }
-
-    // Senhas de Júri
-    if (p === 'juri' || p === 'jurado' || p === 'juri2026' || p === 'notas') {
-      const demo = DEMO_ACCOUNTS[2];
-      setUserSession({
-        uid: 'uid-juri',
-        email: demo.email,
-        nome: demo.name,
-        papel: 'Júri',
-        avatarUrl: demo.avatarUrl,
-      });
-      return { success: true };
-    }
-
-    // Senhas de Editor / Imprensa
-    if (p === 'editor' || p === 'imprensa' || p === 'imprensa2026' || p === 'noticias') {
-      const demo = DEMO_ACCOUNTS[3];
-      setUserSession({
-        uid: 'uid-editor',
-        email: demo.email,
-        nome: demo.name,
-        papel: 'Editor',
-        avatarUrl: demo.avatarUrl,
-      });
-      return { success: true };
-    }
-
-    // Verificar se corresponde a alguma senha de utilizador cadastrado
-    const matchedCustom = registeredUsers.find((u) => u.password && u.password.toLowerCase() === p);
-    if (matchedCustom) {
-      setUserSession({
-        uid: matchedCustom.uid,
-        email: matchedCustom.email,
-        nome: matchedCustom.nome,
-        papel: matchedCustom.papel,
-        avatarUrl: matchedCustom.avatarUrl,
-        telefone: matchedCustom.telefone,
-        municipio: matchedCustom.municipio,
-        criadoEm: matchedCustom.criadoEm,
-      });
-      return { success: true };
-    }
-
-    // Se inseriu qualquer senha com pelo menos 4 caracteres
-    if (p.length >= 4) {
-      setUserSession({
-        uid: `uid-session-${Date.now()}`,
-        email: 'gestor@thevoicelundasul.ao',
-        nome: 'Gestor Autorizado',
-        papel: 'Administrador',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-      });
-      return { success: true };
-    }
-
-    return { success: false, message: 'Palavra-passe não reconhecida. Tente "admin" ou cadastre-se.' };
+    return { success: false, message: 'É obrigatório informar o email e a palavra-passe cadastrados.' };
   };
 
-  // Login exclusivo por Email
   const loginWithEmailOnly = async (emailInput: string): Promise<{ success: boolean; message?: string }> => {
-    return login(emailInput, '');
+    return { success: false, message: 'É obrigatório informar a palavra-passe cadastrada.' };
   };
 
   const removeUser = async (uid: string) => {

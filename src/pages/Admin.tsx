@@ -33,10 +33,12 @@ import {
   MapPin,
   Building,
   RefreshCw,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useEvent } from '../context/EventContext';
 import { Candidate, NewsArticle, Stage, UserRole, CandidateStatus } from '../types';
+import { AdminPaymentsManager } from '../components/AdminPaymentsManager';
 
 export const Admin: React.FC = () => {
   const {
@@ -54,6 +56,8 @@ export const Admin: React.FC = () => {
     stages,
     news,
     settings,
+    paymentOrders,
+    paymentMethods,
     updateCandidateStatus,
     submitEvaluation,
     deleteCandidate,
@@ -62,6 +66,10 @@ export const Admin: React.FC = () => {
     deleteNews,
     saveAllStages,
     updateEventSettings,
+    confirmPayment,
+    rejectPayment,
+    cancelPayment,
+    updatePaymentMethodsList,
     refreshData,
   } = useEvent();
 
@@ -72,11 +80,10 @@ export const Admin: React.FC = () => {
 
   // Navigation within Admin Dashboard
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'candidates' | 'jury' | 'news' | 'stages' | 'users' | 'settings'
+    'overview' | 'candidates' | 'payments' | 'jury' | 'news' | 'stages' | 'users' | 'settings'
   >('overview');
 
-  // Login form state & mode
-  const [loginMode, setLoginMode] = useState<'password' | 'email' | 'both'>('password');
+  // Login form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -137,15 +144,12 @@ export const Admin: React.FC = () => {
     e.preventDefault();
     setLoginError('');
 
-    let res = { success: false, message: '' };
-    if (loginMode === 'password') {
-      res = await login('', password);
-    } else if (loginMode === 'email') {
-      res = await login(email, '');
-    } else {
-      res = await login(email, password);
+    if (!email.trim() || !password.trim()) {
+      setLoginError('Por favor, preencha o email e a palavra-passe.');
+      return;
     }
 
+    const res = await login(email, password);
     if (!res.success) {
       setLoginError(res.message || 'Credenciais inválidas. Verifique os dados ou cadastre-se no sistema.');
     }
@@ -187,12 +191,6 @@ export const Admin: React.FC = () => {
     } finally {
       setRegLoading(false);
     }
-  };
-
-  const handleDemoLogin = async (demo: typeof demoUsers[0]) => {
-    setEmail(demo.email);
-    setPassword(demo.password);
-    await login(demo.email, demo.password);
   };
 
   // Export CSV
@@ -329,11 +327,11 @@ export const Admin: React.FC = () => {
             {authScreen === 'login' ? <ShieldCheck className="w-7 h-7" /> : <UserPlus className="w-7 h-7 text-purple-400" />}
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white">
-            {authScreen === 'login' ? 'Acesso Administrativo' : 'Cadastro de Utilizador'}
+            {authScreen === 'login' ? 'Acesso ao Sistema' : 'Cadastro de Utilizador'}
           </h1>
           <p className="text-xs text-slate-400">
             {authScreen === 'login'
-              ? 'Aceda via palavra-passe, email autorizado ou seleccione um dos perfis oficiais.'
+              ? 'Introduza o seu email e a palavra-passe cadastrados para aceder ao painel.'
               : 'Registe os seus dados no sistema do THE VOICE LUNDA-SUL 2026.'}
           </p>
         </div>
@@ -542,156 +540,77 @@ export const Admin: React.FC = () => {
           </form>
         ) : (
           /* ----------------- TELA DE LOGIN ----------------- */
-          <>
-            {/* Login Method Selector */}
-            <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl">
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginMode('password');
-                  setLoginError('');
-                }}
-                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  loginMode === 'password'
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Key className="w-3.5 h-3.5" />
-                <span>Por Senha</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginMode('email');
-                  setLoginError('');
-                }}
-                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  loginMode === 'email'
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Mail className="w-3.5 h-3.5" />
-                <span>Por Email</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginMode('both');
-                  setLoginError('');
-                }}
-                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  loginMode === 'both'
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>Email + Senha</span>
-              </button>
-            </div>
-
-            {/* Credentials Form */}
-            <form
-              onSubmit={handleLogin}
-              className="rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-4 text-left shadow-2xl"
-            >
-              {loginError && (
-                <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{loginError}</span>
-                </div>
-              )}
-
-              {/* Email Input */}
-              {(loginMode === 'email' || loginMode === 'both') && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Email Cadastrado ou Autorizado</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="ex: superadmin@thevoicelundasul.ao"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
-                  />
-                </div>
-              )}
-
-              {/* Password Input */}
-              {(loginMode === 'password' || loginMode === 'both') && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                      <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>{loginMode === 'password' ? 'Palavra-passe / Código de Acesso' : 'Palavra-passe'}</span>
-                    </label>
-                    {loginMode === 'password' && (
-                      <span className="text-[10px] text-slate-400">Padrão: <code className="text-indigo-300">admin</code></span>
-                    )}
-                  </div>
-                  <input
-                    type="password"
-                    required
-                    placeholder={loginMode === 'password' ? 'Digite "admin", "super2026", "juri2026"...' : '••••••••'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
-                  />
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all"
-              >
-                {loginMode === 'password'
-                  ? 'Entrar com Senha'
-                  : loginMode === 'email'
-                  ? 'Entrar com Email'
-                  : 'Iniciar Sessão no Painel'}
-              </button>
-
-              <div className="text-center pt-1">
-                <button
-                  type="button"
-                  onClick={() => setAuthScreen('register')}
-                  className="text-xs text-purple-400 hover:text-purple-300 font-semibold"
-                >
-                  Novo por aqui? Cadastre um novo utilizador →
-                </button>
-              </div>
-            </form>
-
-            {/* Demo Fast Login Buttons */}
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 text-left">
-              <span className="text-[11px] font-bold text-sky-400 uppercase tracking-wider block">
-                Ou Aceda Directamente com 1-Clique:
+          <form
+            onSubmit={handleLogin}
+            className="rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-4 text-left shadow-2xl"
+          >
+            <div className="border-b border-slate-800 pb-3">
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-indigo-400" />
+                Iniciar Sessão com Conta Cadastrada
+              </h2>
+              <span className="text-[11px] text-slate-400">
+                Insira o seu email e palavra-passe para aceder ao painel.
               </span>
-              <div className="grid grid-cols-1 gap-2">
-                {demoUsers.map((demo) => (
-                  <button
-                    key={demo.email}
-                    type="button"
-                    onClick={() => handleDemoLogin(demo)}
-                    className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-between text-xs transition-colors group"
-                  >
-                    <div>
-                      <strong className="text-white block group-hover:text-sky-300 transition-colors">{demo.nome}</strong>
-                      <span className="text-[10px] text-slate-400">{demo.email}</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 text-[10px] font-bold">
-                      {demo.papel}
-                    </span>
-                  </button>
-                ))}
-              </div>
             </div>
-          </>
+
+            {loginError && (
+              <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            {/* Email Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-sky-400" />
+                <span>Email Cadastrado *</span>
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="ex: seunome@thevoicelundasul.ao ou email pessoal"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+
+            {/* Password Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Palavra-passe *</span>
+              </label>
+              <input
+                type="password"
+                required
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
+            >
+              <KeyRound className="w-4 h-4" />
+              <span>Entrar no Sistema</span>
+            </button>
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => setAuthScreen('register')}
+                className="text-xs text-purple-400 hover:text-purple-300 font-semibold"
+              >
+                Novo utilizador? Cadastre a sua conta aqui →
+              </button>
+            </div>
+          </form>
         )}
       </div>
     );
@@ -743,6 +662,7 @@ export const Admin: React.FC = () => {
         {[
           { id: 'overview', label: 'Visão Geral', icon: Sparkles },
           { id: 'candidates', label: `Candidatos (${candidates.length})`, icon: Users },
+          { id: 'payments', label: `Pagamentos (${paymentOrders.length})`, icon: CreditCard },
           { id: 'jury', label: 'Avaliações do Júri', icon: Award },
           { id: 'news', label: 'Notícias & Imprensa', icon: Newspaper },
           { id: 'stages', label: 'Etapas do Concurso', icon: Calendar },
@@ -1735,6 +1655,25 @@ export const Admin: React.FC = () => {
             </div>
           </form>
         </div>
+      )}
+
+      {/* ------------------ TAB: GESTÃO DE PAGAMENTOS ------------------ */}
+      {activeTab === 'payments' && (
+        <AdminPaymentsManager
+          orders={paymentOrders}
+          candidates={candidates}
+          paymentMethods={paymentMethods}
+          currentAdmin={{
+            uid: user?.id || 'admin-local',
+            nome: user?.nome || 'Administrador',
+            papel: user?.papel || 'Administrador',
+          }}
+          onConfirmPayment={confirmPayment}
+          onRejectPayment={rejectPayment}
+          onCancelPayment={cancelPayment}
+          onUpdatePaymentMethods={updatePaymentMethodsList}
+          onRefresh={refreshData}
+        />
       )}
     </div>
   );

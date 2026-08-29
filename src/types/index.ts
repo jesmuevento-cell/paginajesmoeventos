@@ -75,6 +75,91 @@ export interface Candidate {
   dataInscricao?: string;
   dataCriacao?: string;
   criadoEm?: string;
+  ordemPagamentoId?: string;
+  pagamento?: {
+    ordemId: string;
+    estado: PaymentStatus;
+    valor: number;
+    dataConfirmacao?: string;
+    codigoConfirmacao?: string;
+  };
+}
+
+export type PaymentStatus =
+  | 'AGUARDANDO PAGAMENTO'
+  | 'COMPROVATIVO ENVIADO'
+  | 'PAGAMENTO EM ANÁLISE'
+  | 'PAGO E CONFIRMADO'
+  | 'PAGAMENTO REJEITADO'
+  | 'PAGAMENTO CANCELADO';
+
+export type PaymentMethodType = 'transferencia' | 'presencial' | 'deposito' | 'outro';
+
+export interface PaymentMethodConfig {
+  id: string;
+  tipo: PaymentMethodType;
+  nome: string;
+  ativo: boolean;
+  banco?: string;
+  titular?: string;
+  iban?: string;
+  conta?: string;
+  local?: string;
+  contacto?: string;
+  instrucoes: string;
+}
+
+export interface PaymentAuditLog {
+  id: string;
+  dataHora: string; // ISO string
+  acao: string;
+  descricao: string;
+  adminNome?: string;
+  adminId?: string;
+}
+
+export interface PaymentProof {
+  comprovativoUrl: string;
+  comprovativoNomeArquivo?: string;
+  comprovativoTamanho?: number;
+  comprovativoHash?: string;
+  dataUpload: string;
+  dataPagamentoInformada: string;
+  valorInformado: number;
+  metodoUtilizado: string;
+  nomePagador?: string;
+  numeroTransacao?: string;
+  observacoes?: string;
+}
+
+export interface PaymentOrder {
+  id: string; // Ordem ID (ex: PAY-TVLS-2026-000001)
+  codigoInscricao: string; // ex: TVLS-2026-000001
+  candidatoId: string;
+  nomeConcorrente: string;
+  nomeArtistico?: string;
+  biConcorrente: string;
+  telefoneConcorrente: string;
+  emailConcorrente: string;
+  municipioConcorrente?: string;
+  valor: number; // 5000 (Fixo)
+  moeda: 'Kz' | 'AOA';
+  estado: PaymentStatus;
+  dataCriacao: string;
+  dataAtualizacao?: string;
+  formaPagamentoSelecionada?: string;
+  comprovativo?: PaymentProof;
+  confirmadoPor?: {
+    adminId: string;
+    adminNome: string;
+    dataHora: string;
+    codigoConfirmacao: string;
+  };
+  motivoRejeicao?: string;
+  dataRejeicao?: string;
+  alertaDuplicado?: boolean;
+  motivoAlertaDuplicado?: string;
+  historicoAuditoria: PaymentAuditLog[];
 }
 
 export interface NewsItem {

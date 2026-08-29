@@ -73,6 +73,16 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Pagamentos (Payment Orders & Receipts)
+    match /pagamentos/{pagamentoId} {
+      allow read, write: if true;
+    }
+
+    // Configuração de Métodos de Pagamento
+    match /metodos_pagamento/{metodoId} {
+      allow read, write: if true;
+    }
+
     // Configurações (Settings)
     match /configuracoes/{configId} {
       allow read, write: if true;
