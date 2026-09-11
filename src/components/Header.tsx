@@ -139,10 +139,10 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, setCurrentTab }) => 
                   ? 'border-indigo-500 text-indigo-300 bg-indigo-950/40 shadow-md'
                   : 'bg-slate-900/80 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white'
               }`}
-              title="Acesso e Cadastro de Utilizadores"
+              title="Acesso Administrativo & Gestão"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Entrar / Cadastrar</span>
+              <span>Acesso Admin</span>
             </button>
           )}
 
@@ -224,7 +224,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, setCurrentTab }) => 
               className="w-full py-3 px-4 rounded-xl bg-slate-900/60 border border-indigo-800/40 text-indigo-300 font-semibold text-sm flex items-center justify-center gap-2"
             >
               <ShieldCheck className="w-4 h-4 text-indigo-400" />
-              <span>{isAuthenticated ? `Painel: ${user?.papel}` : 'Entrar / Cadastrar Utilizador'}</span>
+              <span>{isAuthenticated ? `Painel: ${user?.papel}` : 'Acesso Administrativo'}</span>
             </button>
           </div>
         </div>

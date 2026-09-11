@@ -75,9 +75,6 @@ export const Admin: React.FC = () => {
 
   const [isRefreshingData, setIsRefreshingData] = useState(false);
 
-  // Screen toggle: Login vs Cadastro de Usuários
-  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
-
   // Navigation within Admin Dashboard
   const [activeTab, setActiveTab] = useState<
     'overview' | 'candidates' | 'payments' | 'jury' | 'news' | 'stages' | 'users' | 'settings'
@@ -88,7 +85,8 @@ export const Admin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // User Registration State (Cadastro de Usuário)
+  // User Registration Modal State (Exclusivo para Administração)
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [regForm, setRegForm] = useState({
     nome: '',
     email: '',
@@ -184,7 +182,20 @@ export const Admin: React.FC = () => {
       if (!res.success) {
         setRegError(res.message || 'Erro ao cadastrar utilizador.');
       } else {
-        setRegSuccess('Utilizador cadastrado com sucesso! A entrar no sistema...');
+        setRegSuccess('Utilizador cadastrado com sucesso no sistema!');
+        setRegForm({
+          nome: '',
+          email: '',
+          password: '',
+          confirmPassword: '',
+          papel: 'Administrador' as UserRole,
+          telefone: '',
+          municipio: 'Saurimo',
+        });
+        setTimeout(() => {
+          setShowAddUserModal(false);
+          setRegSuccess('');
+        }, 1500);
       }
     } catch (err: any) {
       setRegError(err.message || 'Ocorreu um erro ao registar a conta.');
@@ -317,301 +328,85 @@ export const Admin: React.FC = () => {
   });
 
   // -------------------------------------------------------------
-  // AUTHENTICATION & REGISTRATION SCREEN
+  // AUTHENTICATION SCREEN (LOGIN ONLY - PROTECTED ADMIN ACCESS)
   // -------------------------------------------------------------
   if (!isAuthenticated) {
     return (
       <div className="max-w-md mx-auto px-4 pt-32 pb-20 space-y-6">
         <div className="text-center space-y-2">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/30 to-purple-500/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/10">
-            {authScreen === 'login' ? <ShieldCheck className="w-7 h-7" /> : <UserPlus className="w-7 h-7 text-purple-400" />}
+            <ShieldCheck className="w-7 h-7" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white">
-            {authScreen === 'login' ? 'Acesso ao Sistema' : 'Cadastro de Utilizador'}
+            Acesso ao Sistema
           </h1>
           <p className="text-xs text-slate-400">
-            {authScreen === 'login'
-              ? 'Introduza o seu email e a palavra-passe cadastrados para aceder ao painel.'
-              : 'Registe os seus dados no sistema do THE VOICE LUNDA-SUL 2026.'}
+            Introduza o seu email e a palavra-passe cadastrados para aceder ao painel de gestão.
           </p>
         </div>
 
-        {/* Main Tab Switch: Login vs Registo */}
-        <div className="grid grid-cols-2 gap-1 p-1 bg-slate-900 border border-slate-800 rounded-2xl">
+        {/* ----------------- TELA DE LOGIN ----------------- */}
+        <form
+          onSubmit={handleLogin}
+          className="rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-4 text-left shadow-2xl"
+        >
+          <div className="border-b border-slate-800 pb-3">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-indigo-400" />
+              Iniciar Sessão Administrativa
+            </h2>
+            <span className="text-[11px] text-slate-400">
+              Apenas utilizadores autorizados pela organização têm acesso.
+            </span>
+          </div>
+
+          {loginError && (
+            <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          {/* Email Input */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5 text-sky-400" />
+              <span>Email Cadastrado *</span>
+            </label>
+            <input
+              type="email"
+              required
+              placeholder="ex: seunome@thevoicelundasul.ao ou email autorizado"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+            />
+          </div>
+
+          {/* Password Input */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Palavra-passe *</span>
+            </label>
+            <input
+              type="password"
+              required
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+            />
+          </div>
+
           <button
-            type="button"
-            onClick={() => {
-              setAuthScreen('login');
-              setLoginError('');
-              setRegError('');
-            }}
-            className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-              authScreen === 'login'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            type="submit"
+            className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
           >
             <KeyRound className="w-4 h-4" />
-            <span>Iniciar Sessão</span>
+            <span>Entrar no Sistema</span>
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setAuthScreen('register');
-              setLoginError('');
-              setRegError('');
-            }}
-            className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-              authScreen === 'register'
-                ? 'bg-purple-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Cadastrar Conta</span>
-          </button>
-        </div>
-
-        {/* ----------------- TELA DE CADASTRO ----------------- */}
-        {authScreen === 'register' ? (
-          <form
-            onSubmit={handleRegister}
-            className="rounded-3xl bg-slate-900 border border-purple-900/40 p-6 space-y-4 text-left shadow-2xl"
-          >
-            <div className="border-b border-slate-800 pb-3">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-400" />
-                Criar Nova Conta no Sistema
-              </h2>
-              <span className="text-[11px] text-slate-400">
-                Preencha os campos para acesso à comissão organizadora, júri ou gestão.
-              </span>
-            </div>
-
-            {regError && (
-              <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{regError}</span>
-              </div>
-            )}
-
-            {regSuccess && (
-              <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{regSuccess}</span>
-              </div>
-            )}
-
-            {/* Nome Completo */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-purple-400" />
-                <span>Nome Completo *</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="ex: Dr. António Samucanda"
-                value={regForm.nome}
-                onChange={(e) => setRegForm({ ...regForm, nome: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
-              />
-            </div>
-
-            {/* Email de Acesso */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-sky-400" />
-                <span>Email de Acesso *</span>
-              </label>
-              <input
-                type="email"
-                required
-                placeholder="ex: seunome@thevoicelundasul.ao ou gmail.com"
-                value={regForm.email}
-                onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
-              />
-            </div>
-
-            {/* Cargo / Papel */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Cargo / Função Oficial *</span>
-              </label>
-              <select
-                value={regForm.papel}
-                onChange={(e) => setRegForm({ ...regForm, papel: e.target.value as UserRole })}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-400"
-              >
-                <option value="Administrador">Comissão Organizadora / Administrador</option>
-                <option value="Júri">Membro do Júri Avaliador</option>
-                <option value="Editor">Comunicação, Redação & Imprensa</option>
-                <option value="Super Administrador">Super Administrador (Director Geral)</option>
-              </select>
-            </div>
-
-            {/* Telefone & Município */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Telefone</span>
-                </label>
-                <input
-                  type="tel"
-                  placeholder="+244 9..."
-                  value={regForm.telefone}
-                  onChange={(e) => setRegForm({ ...regForm, telefone: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Município</span>
-                </label>
-                <select
-                  value={regForm.municipio}
-                  onChange={(e) => setRegForm({ ...regForm, municipio: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-400"
-                >
-                  <option value="Saurimo">Saurimo</option>
-                  <option value="Cacolo">Cacolo</option>
-                  <option value="Dala">Dala</option>
-                  <option value="Muconda">Muconda</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Palavra-passe e Confirmação */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Palavra-passe *</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Mínimo 4 dígitos"
-                  value={regForm.password}
-                  onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Confirmar Senha *</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Repita a senha"
-                  value={regForm.confirmPassword}
-                  onChange={(e) => setRegForm({ ...regForm, confirmPassword: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={regLoading}
-              className="w-full py-3.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>{regLoading ? 'A Registar Conta...' : 'Concluir Cadastro e Entrar'}</span>
-            </button>
-
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => setAuthScreen('login')}
-                className="text-xs text-slate-400 hover:text-white underline"
-              >
-                Já tem conta cadastrada? Iniciar sessão
-              </button>
-            </div>
-          </form>
-        ) : (
-          /* ----------------- TELA DE LOGIN ----------------- */
-          <form
-            onSubmit={handleLogin}
-            className="rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-4 text-left shadow-2xl"
-          >
-            <div className="border-b border-slate-800 pb-3">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-indigo-400" />
-                Iniciar Sessão com Conta Cadastrada
-              </h2>
-              <span className="text-[11px] text-slate-400">
-                Insira o seu email e palavra-passe para aceder ao painel.
-              </span>
-            </div>
-
-            {loginError && (
-              <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{loginError}</span>
-              </div>
-            )}
-
-            {/* Email Input */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-sky-400" />
-                <span>Email Cadastrado *</span>
-              </label>
-              <input
-                type="email"
-                required
-                placeholder="ex: seunome@thevoicelundasul.ao ou email pessoal"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
-              />
-            </div>
-
-            {/* Password Input */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Palavra-passe *</span>
-              </label>
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
-            >
-              <KeyRound className="w-4 h-4" />
-              <span>Entrar no Sistema</span>
-            </button>
-
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => setAuthScreen('register')}
-                className="text-xs text-purple-400 hover:text-purple-300 font-semibold"
-              >
-                Novo utilizador? Cadastre a sua conta aqui →
-              </button>
-            </div>
-          </form>
-        )}
+        </form>
       </div>
     );
   }
@@ -1408,11 +1203,24 @@ export const Admin: React.FC = () => {
                 Gestão de Utilizadores e Contas de Acesso
               </h3>
               <p className="text-xs text-slate-400">
-                Lista de todos os administradores, jurados e utilizadores cadastrados no THE VOICE LUNDA-SUL.
+                Lista de todos os administradores, jurados e utilizadores autorizados no THE VOICE LUNDA-SUL.
               </p>
             </div>
-            <div className="px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold">
-              Total: {demoUsers.length + registeredUsers.length} contas
+            <div className="flex items-center gap-3">
+              <div className="px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold">
+                Total: {demoUsers.length + registeredUsers.length} contas
+              </div>
+              <button
+                onClick={() => {
+                  setRegError('');
+                  setRegSuccess('');
+                  setShowAddUserModal(true);
+                }}
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-purple-600/30 transition-all"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Cadastrar Novo Utilizador</span>
+              </button>
             </div>
           </div>
 
@@ -1674,6 +1482,182 @@ export const Admin: React.FC = () => {
           onUpdatePaymentMethods={updatePaymentMethodsList}
           onRefresh={refreshData}
         />
+      )}
+
+      {/* ------------------ MODAL DE CADASTRO DE UTILIZADOR (PROTEGIDO) ------------------ */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-3xl bg-slate-900 border border-purple-900/50 p-6 sm:p-8 space-y-5 text-left shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Cadastrar Novo Utilizador</h3>
+                  <p className="text-xs text-slate-400">Atribuir acesso à comissão, júri ou administração</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddUserModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRegister} className="space-y-4">
+              {regError && (
+                <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{regError}</span>
+                </div>
+              )}
+
+              {regSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{regSuccess}</span>
+                </div>
+              )}
+
+              {/* Nome Completo */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Nome Completo *</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ex: Dr. António Samucanda"
+                  value={regForm.nome}
+                  onChange={(e) => setRegForm({ ...regForm, nome: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
+                />
+              </div>
+
+              {/* Email de Acesso */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Email de Acesso *</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="ex: nome@thevoicelundasul.ao ou email pessoal"
+                  value={regForm.email}
+                  onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
+                />
+              </div>
+
+              {/* Cargo / Papel */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Cargo / Função Oficial *</span>
+                </label>
+                <select
+                  value={regForm.papel}
+                  onChange={(e) => setRegForm({ ...regForm, papel: e.target.value as UserRole })}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-400"
+                >
+                  <option value="Administrador">Comissão Organizadora / Administrador</option>
+                  <option value="Júri">Membro do Júri Avaliador</option>
+                  <option value="Editor">Comunicação, Redação & Imprensa</option>
+                  <option value="Super Administrador">Super Administrador (Director Geral)</option>
+                </select>
+              </div>
+
+              {/* Telefone & Município */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Telefone</span>
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+244 9..."
+                    value={regForm.telefone}
+                    onChange={(e) => setRegForm({ ...regForm, telefone: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Município</span>
+                  </label>
+                  <select
+                    value={regForm.municipio}
+                    onChange={(e) => setRegForm({ ...regForm, municipio: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-400"
+                  >
+                    <option value="Saurimo">Saurimo</option>
+                    <option value="Cacolo">Cacolo</option>
+                    <option value="Dala">Dala</option>
+                    <option value="Muconda">Muconda</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Palavra-passe e Confirmação */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Palavra-passe *</span>
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Mínimo 4 dígitos"
+                    value={regForm.password}
+                    onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Confirmar Senha *</span>
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Repita a senha"
+                    value={regForm.confirmPassword}
+                    onChange={(e) => setRegForm({ ...regForm, confirmPassword: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-purple-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUserModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={regLoading}
+                  className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>{regLoading ? 'A Registar...' : 'Salvar Novo Utilizador'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
