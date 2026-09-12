@@ -223,7 +223,7 @@ export const PaymentProofModal: React.FC<PaymentProofModalProps> = ({
                   <div>
                     <div className="text-white">Supervisor WhatsApp 2</div>
                     <div className="text-[11px] text-emerald-400 font-mono font-normal">
-                      +244 940 543 775 (940543775)
+                      +244 942 341 091 (942341091)
                     </div>
                   </div>
                 </div>
@@ -243,9 +243,9 @@ export const PaymentProofModal: React.FC<PaymentProofModalProps> = ({
                 <div className="flex items-center gap-2.5">
                   <Mail className="w-4 h-4 text-sky-400 shrink-0" />
                   <div>
-                    <div className="text-white">Email Oficial JESMU-EVENTOS</div>
+                    <div className="text-white">Email Geral da Organização</div>
                     <div className="text-[11px] text-sky-400 font-normal">
-                      jesmuevento@gmail.com
+                      smuevento@gmail.com
                     </div>
                   </div>
                 </div>

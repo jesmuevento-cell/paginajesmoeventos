@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { useEvent } from '../context/EventContext';
 import { Candidate, CandidateStatus, PaymentOrder } from '../types';
-import { findCandidateByCodeOrEmail } from '../firebase/services';
+import { findCandidateByCodeOrEmail, findCandidateByBiAndCode } from '../firebase/services';
 import { PaymentProofModal } from '../components/PaymentProofModal';
 import { PaymentReceiptModal } from '../components/PaymentReceiptModal';
 import { REGISTRATION_FEE, REGISTRATION_CURRENCY } from '../services/paymentService';
@@ -42,7 +42,9 @@ export const CandidateArea: React.FC = () => {
     getPaymentOrderByCode,
     refreshData,
   } = useEvent();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [biInput, setBiInput] = useState('');
+  const [codigoInput, setCodigoInput] = useState('');
+  const [searchError, setSearchError] = useState('');
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
   const [candidate, setCandidate] = useState<Candidate | null>(null);
@@ -53,42 +55,35 @@ export const CandidateArea: React.FC = () => {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return;
+    const cleanBi = biInput.trim().toUpperCase().replace(/\s+/g, '');
+    const cleanCode = codigoInput.trim().toUpperCase().replace(/\s+/g, '');
 
+    if (!cleanBi || !cleanCode) {
+      setSearchError('Por favor preencha obrigatoriamente o Número do Bilhete de Identidade (BI) e o Código da Candidatura.');
+      return;
+    }
+
+    setSearchError('');
     setSearching(true);
     setSearched(false);
 
     try {
-      // 1. Procurar em memória primeiro
-      let found = candidates.find(
-        (c) =>
-          c.codigoInscricao.toLowerCase() === query ||
-          c.email.toLowerCase() === query ||
-          c.bi.toLowerCase() === query ||
-          (c.bi && c.bi.toLowerCase().replace(/\s+/g, '') === query.replace(/\s+/g, '')) ||
-          (c.telefone && c.telefone.replace(/\D/g, '') === query.replace(/\D/g, '')) ||
-          (c.whatsapp && c.whatsapp.replace(/\D/g, '') === query.replace(/\D/g, '')) ||
-          c.nomeCompleto.toLowerCase().includes(query) ||
-          c.nomeArtistico.toLowerCase().includes(query)
-      );
+      // 1. Procurar em memória local garantindo conformidade de ambos os campos
+      let found = candidates.find((c) => {
+        const cBi = (c.bi || '').trim().toUpperCase().replace(/\s+/g, '');
+        const cCode = (c.codigoInscricao || '').trim().toUpperCase().replace(/\s+/g, '');
+        return cBi === cleanBi && cCode === cleanCode;
+      });
 
-      // 2. Se não encontrar em memória ou para obter o registo mais recente da nuvem
+      // 2. Se não estiver em memória, buscar diretamente no Firestore com verificação segura
       if (!found) {
-        found = (await findCandidateByCodeOrEmail(searchQuery)) || undefined;
+        found = (await findCandidateByBiAndCode(cleanBi, cleanCode)) || undefined;
       }
 
       setCandidate(found || null);
     } catch (err) {
-      console.warn('Erro ao consultar candidato:', err);
-      // Fallback em memória
-      const fallback = candidates.find(
-        (c) =>
-          c.codigoInscricao.toLowerCase() === query ||
-          c.email.toLowerCase() === query ||
-          c.bi.toLowerCase() === query
-      );
-      setCandidate(fallback || null);
+      console.warn('Erro ao consultar candidatura:', err);
+      setCandidate(null);
     } finally {
       setSearching(false);
       setSearched(true);
@@ -107,6 +102,13 @@ export const CandidateArea: React.FC = () => {
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-xs font-bold">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             {estado}
+          </span>
+        );
+      case 'Pendente':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/40 text-xs font-bold">
+            <Clock className="w-4 h-4 text-amber-400" />
+            Pendente (Em Análise)
           </span>
         );
       case 'Recebida':
@@ -182,36 +184,73 @@ export const CandidateArea: React.FC = () => {
         </p>
       </div>
 
-      {/* Search Bar */}
-      <form
-        onSubmit={handleSearch}
-        className="p-3 rounded-2xl bg-slate-900 border border-sky-700/50 shadow-2xl flex flex-col sm:flex-row items-center gap-2"
-      >
-        <div className="relative flex-1 w-full">
-          <Search className="w-5 h-5 text-sky-400 absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Insira o Código (ex: TVLS-2026-001), Email ou BI..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-transparent text-white text-sm focus:outline-none placeholder-slate-500 font-medium"
-          />
+      {/* Form de Consulta Segura (BI + Código) */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/90 border border-sky-700/50 shadow-2xl space-y-5 text-left">
+        <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+          <ShieldCheck className="w-5 h-5 text-sky-400" />
+          <div>
+            <h3 className="text-base font-bold text-white">Consulta Individual da Candidatura</h3>
+            <p className="text-xs text-slate-400">
+              Por razões de privacidade e protecção de dados, insira o seu N.º de BI e o Código recebido na inscrição.
+            </p>
+          </div>
         </div>
-        <button
-          type="submit"
-          disabled={searching}
-          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-sky-600/30 transition-all whitespace-nowrap flex items-center justify-center gap-2 disabled:opacity-60"
-        >
-          {searching ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>A Consultar...</span>
-            </>
-          ) : (
-            <span>Consultar Estado</span>
+
+        <form onSubmit={handleSearch} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Input BI */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">N.º do Bilhete de Identidade (BI) *</label>
+              <input
+                type="text"
+                placeholder="Ex: 006741298LS042"
+                value={biInput}
+                onChange={(e) => setBiInput(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-slate-500 uppercase font-mono"
+              />
+            </div>
+
+            {/* Input Código */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-300">Código da Candidatura *</label>
+              <input
+                type="text"
+                placeholder="Ex: TVLS-2026-X8M4K9P2"
+                value={codigoInput}
+                onChange={(e) => setCodigoInput(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-slate-500 uppercase font-mono"
+              />
+            </div>
+          </div>
+
+          {searchError && (
+            <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/50 text-red-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{searchError}</span>
+            </div>
           )}
-        </button>
-      </form>
+
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              disabled={searching}
+              className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-sky-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {searching ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>A Consultar...</span>
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  <span>Consultar Minha Candidatura</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
 
       {/* Result Card */}
       {searched && (
@@ -576,7 +615,7 @@ export const CandidateArea: React.FC = () => {
               <AlertCircle className="w-10 h-10 text-amber-400 mx-auto" />
               <h3 className="text-lg font-bold text-white">Nenhum candidato encontrado</h3>
               <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Não encontramos nenhuma candidatura associada a "<strong>{searchQuery}</strong>". Verifique se digitou o código completo (ex: TVLS-2026-001) ou o email correcto.
+                Não encontramos nenhuma candidatura associada ao BI "<strong>{biInput}</strong>" com o Código "<strong>{codigoInput}</strong>". Verifique se digitou o Bilhete de Identidade e o Código da Candidatura correctamente.
               </p>
             </div>
           )}
@@ -587,14 +626,15 @@ export const CandidateArea: React.FC = () => {
       {!searched && (
         <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 text-left space-y-3">
           <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">
-            Exemplos de Códigos para Consulta Rápida:
+            Exemplos para Teste Rápido de Consulta:
           </span>
           <div className="flex flex-wrap gap-2">
             {candidates.slice(0, 4).map((c) => (
               <button
                 key={c.id}
                 onClick={() => {
-                  setSearchQuery(c.codigoInscricao);
+                  setBiInput(c.bi);
+                  setCodigoInput(c.codigoInscricao);
                   setCandidate(c);
                   setSearched(true);
                 }}

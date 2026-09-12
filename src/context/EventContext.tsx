@@ -10,6 +10,7 @@ import {
   PaymentOrder,
   PaymentMethodConfig,
   PaymentProof,
+  CandidateAuditLog,
 } from '../types';
 import {
   fetchCandidates,
@@ -27,6 +28,8 @@ import {
   deleteGalleryItem,
   fetchSettings,
   saveSettings,
+  fetchAuditLogs,
+  saveAuditLog,
 } from '../firebase/services';
 import {
   fetchPaymentOrders,
@@ -59,11 +62,14 @@ interface EventContextType {
   evaluations: Evaluation[];
   paymentOrders: PaymentOrder[];
   paymentMethods: PaymentMethodConfig[];
+  auditLogs: CandidateAuditLog[];
   loading: boolean;
   isRegistrationOpen: boolean;
   isRegistrationEnded: boolean;
   isRegistrationPending: boolean;
   registerCandidate: (data: Omit<Candidate, 'id' | 'codigoInscricao' | 'estado' | 'dataInscricao' | 'criadoEm'>) => Promise<{ candidate: Candidate; paymentOrder: PaymentOrder }>;
+  confirmCandidate: (id: string, admin: { uid: string; nome: string; papel: string }, observacao?: string, novoEstado?: CandidateStatus) => Promise<Candidate>;
+  rejectCandidate: (id: string, admin: { uid: string; nome: string; papel: string }, motivo: string) => Promise<Candidate>;
   updateCandidateStatus: (id: string, newStatus: CandidateStatus, message?: string) => Promise<void>;
   updateCandidate: (candidate: Candidate) => Promise<void>;
   deleteCandidate: (id: string) => Promise<void>;
@@ -104,12 +110,13 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [evaluations, setEvaluations] = useState<Evaluation[]>(INITIAL_EVALUATIONS);
   const [paymentOrders, setPaymentOrders] = useState<PaymentOrder[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(INITIAL_PAYMENT_METHODS);
+  const [auditLogs, setAuditLogs] = useState<CandidateAuditLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadAll = async () => {
     try {
       setLoading(true);
-      const [st, cands, nws, gal, evals, sets, orders, methods] = await Promise.all([
+      const [st, cands, nws, gal, evals, sets, orders, methods, logs] = await Promise.all([
         fetchStages(),
         fetchCandidates(),
         fetchNews(),
@@ -118,6 +125,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         fetchSettings(),
         fetchPaymentOrders(),
         fetchPaymentMethods(),
+        fetchAuditLogs(),
       ]);
       setStages(st);
       setCandidates(cands);
@@ -126,6 +134,7 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setEvaluations(evals);
       setSettings(sets);
       setPaymentMethods(methods);
+      setAuditLogs(logs);
 
       // Sincronizar ordens para candidatos existentes que não tinham ordem criada
       let syncdOrders = [...orders];
@@ -165,11 +174,28 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const isRegistrationEnded = settings.estadoInscricoes === 'encerrada' || (settings.estadoInscricoes === 'automatica' && now > endDate);
   const isRegistrationOpen = settings.estadoInscricoes === 'aberta' || (settings.estadoInscricoes === 'automatica' && now >= startDate && now <= endDate);
 
+  // Gerador de código imprevisível e não sequencial (Prevenção de enumeração)
+  const generateSecureCandidateCode = (): string => {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let randomPart = '';
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+      const bytes = new Uint8Array(8);
+      window.crypto.getRandomValues(bytes);
+      for (let i = 0; i < 8; i++) {
+        randomPart += chars[bytes[i] % chars.length];
+      }
+    } else {
+      for (let i = 0; i < 8; i++) {
+        randomPart += chars[Math.floor(Math.random() * chars.length)];
+      }
+    }
+    return `TVLS-2026-${randomPart}`;
+  };
+
   const registerCandidate = async (
     data: Omit<Candidate, 'id' | 'codigoInscricao' | 'estado' | 'dataInscricao' | 'criadoEm'>
   ): Promise<{ candidate: Candidate; paymentOrder: PaymentOrder }> => {
-    const randomCodeNum = Math.floor(100000 + Math.random() * 900000);
-    const uniqueCode = `TVLS-2026-${randomCodeNum}`;
+    const uniqueCode = generateSecureCandidateCode();
     const timestamp = new Date().toISOString();
     const formattedDate = new Date().toLocaleString('pt-AO', {
       day: '2-digit',
@@ -183,10 +209,10 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...data,
       id: `cand-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       codigoInscricao: uniqueCode,
-      estado: 'Recebida',
+      estado: 'Pendente',
       etapaActual: 'Inscrições Oficiais',
       mensagensOrganizacao: [
-        'A sua inscrição no THE VOICE LUNDA-SUL foi submetida com sucesso. Efectue o pagamento de 5.000 Kz e envie o comprovativo para validação oficial.',
+        'A sua inscrição no THE VOICE LUNDA-SUL foi submetida com sucesso e encontra-se no estado Pendente. Efectue o pagamento e aguarde a validação oficial do corpo administrativo.',
       ],
       dataInscricao: formattedDate,
       criadoEm: timestamp,
@@ -196,6 +222,21 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         estado: 'AGUARDANDO PAGAMENTO',
         valor: REGISTRATION_FEE,
       },
+      historicoAuditoria: [
+        {
+          id: `aud-reg-${Date.now()}`,
+          dataHora: timestamp,
+          data: formattedDate.split(' ')[0],
+          hora: formattedDate.split(' ')[1] || '',
+          adminId: 'sistema',
+          adminNome: 'Portal de Inscrições Online',
+          adminPapel: 'Sistema',
+          estadoAnterior: 'Pendente',
+          novoEstado: 'Pendente',
+          acao: 'SUBMISSÃO INICIAL DE CANDIDATURA',
+          observacao: 'Candidatura submetida pelo próprio candidato via portal público.',
+        },
+      ],
     };
 
     // 1. Criar Ordem de Pagamento associada
@@ -210,6 +251,110 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setPaymentOrders((prev) => [order, ...prev]);
 
     return { candidate: newCandidate, paymentOrder: order };
+  };
+
+  // Confirmação de Candidatura pelo Administrador com Auditoria Completa
+  const confirmCandidate = async (
+    id: string,
+    admin: { uid: string; nome: string; papel: string },
+    observacao?: string,
+    novoEstado: CandidateStatus = 'Aprovada'
+  ): Promise<Candidate> => {
+    const target = candidates.find((c) => c.id === id);
+    if (!target) throw new Error('Candidatura não encontrada.');
+
+    const nowTime = new Date();
+    const dataFormatada = nowTime.toLocaleDateString('pt-AO');
+    const horaFormatada = nowTime.toLocaleTimeString('pt-AO', { hour: '2-digit', minute: '2-digit' });
+
+    const auditEntry: CandidateAuditLog = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      dataHora: nowTime.toISOString(),
+      data: dataFormatada,
+      hora: horaFormatada,
+      adminId: admin.uid,
+      adminNome: admin.nome,
+      adminPapel: admin.papel,
+      estadoAnterior: target.estado,
+      novoEstado: novoEstado,
+      acao: 'CONFIRMAÇÃO DE CANDIDATURA',
+      observacao: observacao || 'Candidatura confirmada e aprovada pelo corpo administrativo.',
+    };
+
+    const updatedCandidate: Candidate = {
+      ...target,
+      estado: novoEstado,
+      confirmadoPor: {
+        adminId: admin.uid,
+        adminNome: admin.nome,
+        adminPapel: admin.papel,
+        dataHora: nowTime.toISOString(),
+        observacao: observacao || '',
+      },
+      mensagensOrganizacao: [
+        ...(target.mensagensOrganizacao || []),
+        `Candidatura confirmada em ${dataFormatada} às ${horaFormatada} por ${admin.nome} (${admin.papel}).`,
+      ],
+      historicoAuditoria: [auditEntry, ...(target.historicoAuditoria || [])],
+    };
+
+    await Promise.all([
+      saveCandidate(updatedCandidate),
+      saveAuditLog(auditEntry),
+    ]);
+
+    setCandidates((prev) => prev.map((c) => (c.id === id ? updatedCandidate : c)));
+    setAuditLogs((prev) => [auditEntry, ...prev]);
+
+    return updatedCandidate;
+  };
+
+  // Rejeição de Candidatura pelo Administrador com Auditoria Completa
+  const rejectCandidate = async (
+    id: string,
+    admin: { uid: string; nome: string; papel: string },
+    motivo: string
+  ): Promise<Candidate> => {
+    const target = candidates.find((c) => c.id === id);
+    if (!target) throw new Error('Candidatura não encontrada.');
+
+    const nowTime = new Date();
+    const dataFormatada = nowTime.toLocaleDateString('pt-AO');
+    const horaFormatada = nowTime.toLocaleTimeString('pt-AO', { hour: '2-digit', minute: '2-digit' });
+
+    const auditEntry: CandidateAuditLog = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      dataHora: nowTime.toISOString(),
+      data: dataFormatada,
+      hora: horaFormatada,
+      adminId: admin.uid,
+      adminNome: admin.nome,
+      adminPapel: admin.papel,
+      estadoAnterior: target.estado,
+      novoEstado: 'Rejeitado',
+      acao: 'REJEIÇÃO DE CANDIDATURA',
+      observacao: motivo,
+    };
+
+    const updatedCandidate: Candidate = {
+      ...target,
+      estado: 'Rejeitado',
+      mensagensOrganizacao: [
+        ...(target.mensagensOrganizacao || []),
+        `Candidatura rejeitada em ${dataFormatada} às ${horaFormatada}. Motivo: ${motivo}`,
+      ],
+      historicoAuditoria: [auditEntry, ...(target.historicoAuditoria || [])],
+    };
+
+    await Promise.all([
+      saveCandidate(updatedCandidate),
+      saveAuditLog(auditEntry),
+    ]);
+
+    setCandidates((prev) => prev.map((c) => (c.id === id ? updatedCandidate : c)));
+    setAuditLogs((prev) => [auditEntry, ...prev]);
+
+    return updatedCandidate;
   };
 
   const updateCandidateStatus = async (
@@ -451,11 +596,14 @@ export const EventProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         evaluations,
         paymentOrders,
         paymentMethods,
+        auditLogs,
         loading,
         isRegistrationOpen,
         isRegistrationEnded,
         isRegistrationPending,
         registerCandidate,
+        confirmCandidate,
+        rejectCandidate,
         updateCandidateStatus,
         updateCandidate,
         deleteCandidate,

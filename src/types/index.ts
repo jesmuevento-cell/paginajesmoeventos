@@ -16,10 +16,26 @@ export type CandidateStatus =
 export type UserRole =
   | 'Super Administrador'
   | 'Administrador'
+  | 'Validador'
+  | 'Operador'
   | 'Júri'
   | 'Editor'
   | 'Candidato'
   | 'Visitante';
+
+export interface CandidateAuditLog {
+  id: string;
+  dataHora: string; // ISO string
+  data: string; // e.g. '12/09/2026'
+  hora: string; // e.g. '23:15'
+  adminId: string;
+  adminNome: string;
+  adminPapel: string;
+  estadoAnterior: CandidateStatus;
+  novoEstado: CandidateStatus;
+  acao: string;
+  observacao?: string;
+}
 
 export interface SocialLinks {
   instagram?: string;
@@ -76,6 +92,16 @@ export interface Candidate {
   dataCriacao?: string;
   criadoEm?: string;
   ordemPagamentoId?: string;
+  alertaDuplicado?: boolean;
+  motivoAlertaDuplicado?: string;
+  confirmadoPor?: {
+    adminId: string;
+    adminNome: string;
+    adminPapel: string;
+    dataHora: string;
+    observacao?: string;
+  };
+  historicoAuditoria?: CandidateAuditLog[];
   pagamento?: {
     ordemId: string;
     estado: PaymentStatus;

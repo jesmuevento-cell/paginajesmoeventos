@@ -20,11 +20,13 @@ import {
   Radio,
   FileCheck,
   ArrowRight,
+  Info,
 } from 'lucide-react';
 import { useEvent } from '../context/EventContext';
 import { Candidate } from '../types';
 import { CountdownTimer } from '../components/CountdownTimer';
 import { printCandidateDossier } from '../utils/printReceipt';
+import { LISTA_PROVINCIAS, getMunicipiosPorProvincia } from '../data/angolaGeo';
 
 interface RegistrationProps {
   setCurrentTab: (tab: string) => void;
@@ -71,6 +73,17 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
   const [createdCandidate, setCreatedCandidate] = useState<Candidate | null>(null);
   const [copied, setCopied] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string>('');
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [duplicateInfo, setDuplicateInfo] = useState<{ isDuplicate: boolean; reason?: string }>({ isDuplicate: false });
+
+  const handleProvinciaChange = (novaProvincia: string) => {
+    const municipios = getMunicipiosPorProvincia(novaProvincia);
+    setFormData((prev) => ({
+      ...prev,
+      provincia: novaProvincia,
+      municipio: municipios[0] || '',
+    }));
+  };
 
   // Auto calculate age
   const handleBirthdateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,6 +137,8 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
+    let isDuplicate = false;
+    const duplicateReasons: string[] = [];
 
     if (!formData.nomeCompleto.trim()) newErrors.nomeCompleto = 'Nome completo é obrigatório.';
     if (!formData.nomeArtistico.trim()) newErrors.nomeArtistico = 'Nome artístico é obrigatório.';
@@ -133,11 +148,12 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
     if (!formData.bi.trim()) {
       newErrors.bi = 'Número do Bilhete de Identidade é obrigatório.';
     } else {
-      // Check duplicate BI
-      const biClean = formData.bi.trim().toLowerCase();
-      const duplicateBi = candidates.some((c) => c.bi.toLowerCase() === biClean);
+      // Detecção de duplicado sem bloquear (permite análise administrativa)
+      const biClean = formData.bi.trim().toUpperCase().replace(/\s+/g, '');
+      const duplicateBi = candidates.some((c) => (c.bi || '').trim().toUpperCase().replace(/\s+/g, '') === biClean);
       if (duplicateBi) {
-        newErrors.bi = 'Já existe uma inscrição com este número de Bilhete de Identidade.';
+        isDuplicate = true;
+        duplicateReasons.push('N.º de BI coincide com registo anterior');
       }
     }
 
@@ -149,15 +165,27 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Insira um formato de email válido.';
     } else {
-      // Check duplicate email
+      // Detecção de duplicado por email
       const emailClean = formData.email.trim().toLowerCase();
-      const duplicateEmail = candidates.some((c) => c.email.toLowerCase() === emailClean);
+      const duplicateEmail = candidates.some((c) => (c.email || '').trim().toLowerCase() === emailClean);
       if (duplicateEmail) {
-        newErrors.email = 'Já existe uma inscrição associada a este endereço de email.';
+        isDuplicate = true;
+        duplicateReasons.push('Endereço de email coincide com registo anterior');
       }
     }
 
-    if (!formData.bairro.trim()) newErrors.bairro = 'Bairro ou endereço é obrigatório.';
+    if (isDuplicate) {
+      const fullReason = `Possível candidatura duplicada — verificar (${duplicateReasons.join('; ')})`;
+      setDuplicateInfo({ isDuplicate: true, reason: fullReason });
+      setDuplicateWarning(
+        'Aviso da Organização: Foi detectado um registo anterior com dados semelhantes (BI ou email). A sua candidatura será submetida com o estado Pendente e sinalizada como "Possível candidatura duplicada — verificar" para que a comissão administrativa analise o seu processo individualmente.'
+      );
+    } else {
+      setDuplicateInfo({ isDuplicate: false });
+      setDuplicateWarning(null);
+    }
+
+    if (!formData.bairro.trim()) newErrors.bairro = 'Bairro ou localidade é obrigatório.';
     if (!formData.biografia.trim()) newErrors.biografia = 'Escreva uma breve biografia artística.';
     if (!formData.motivacao.trim()) newErrors.motivacao = 'Descreva a sua motivação para participar.';
 
@@ -188,12 +216,14 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
           ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80'
           : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80');
 
-      const saved = await registerCandidate({
+      const savedRes = await registerCandidate({
         ...formData,
         fotoUrl: finalPhoto,
+        alertaDuplicado: duplicateInfo.isDuplicate,
+        motivoAlertaDuplicado: duplicateInfo.reason,
       });
 
-      setCreatedCandidate(saved);
+      setCreatedCandidate(savedRes.candidate);
 
       // Trigger celebration confetti
       try {
@@ -566,36 +596,44 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
 
             {/* Província */}
             <div className="space-y-1.5 text-left">
-              <label className="text-xs font-bold text-slate-300">Província</label>
-              <input
-                type="text"
+              <label className="text-xs font-bold text-slate-300">Província de Residência *</label>
+              <select
                 value={formData.provincia}
-                readOnly
-                className="w-full px-4 py-3 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-300 text-sm font-semibold cursor-not-allowed"
-              />
+                onChange={(e) => handleProvinciaChange(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+              >
+                {LISTA_PROVINCIAS.map((prov) => (
+                  <option key={prov} value={prov}>
+                    {prov}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Município */}
             <div className="space-y-1.5 text-left">
-              <label className="text-xs font-bold text-slate-300">Município *</label>
+              <label className="text-xs font-bold text-slate-300">Município de Residência *</label>
               <select
                 value={formData.municipio}
                 onChange={(e) => setFormData({ ...formData, municipio: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
               >
-                <option value="Saurimo">Saurimo (Sede Provincial)</option>
-                <option value="Cacolo">Cacolo</option>
-                <option value="Dala">Dala</option>
-                <option value="Muconda">Muconda</option>
+                {getMunicipiosPorProvincia(formData.provincia).map((mun) => (
+                  <option key={mun} value={mun}>
+                    {mun}
+                  </option>
+                ))}
               </select>
             </div>
 
             {/* Bairro ou Endereço */}
             <div className="sm:col-span-2 space-y-1.5 text-left">
-              <label className="text-xs font-bold text-slate-300">Bairro ou Endereço Residencial *</label>
+              <label className="text-xs font-bold text-slate-300">
+                Localidade, Comuna ou Bairro de Residência *
+              </label>
               <input
                 type="text"
-                placeholder="Ex: Bairro Txizainga II, Rua 4, Casa n.º 12"
+                placeholder="Ex: Bairro Txizainga II, Rua 4, Casa n.º 12 / Comuna / Aldeia"
                 value={formData.bairro}
                 onChange={(e) => setFormData({ ...formData, bairro: e.target.value })}
                 className={`w-full px-4 py-3 rounded-xl bg-slate-950 border text-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-400 ${
@@ -644,6 +682,7 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
               >
                 <option value="Semba">Semba</option>
                 <option value="Kizomba & Zouk">Kizomba & Zouk</option>
+                <option value="Kuduro">Kuduro</option>
                 <option value="Gospel">Gospel</option>
                 <option value="R&B / Soul">R&B / Soul</option>
                 <option value="Tradicional Cokwe / Regional">Tradicional Cokwe / Regional</option>
@@ -872,6 +911,17 @@ export const Registration: React.FC<RegistrationProps> = ({ setCurrentTab }) => 
             )}
           </div>
         </div>
+
+        {/* ALERTA DE POSSÍVEL DUPLICAÇÃO (NÃO BLOQUEIA, AVISA) */}
+        {duplicateWarning && (
+          <div className="p-4 rounded-2xl bg-amber-950/50 border border-amber-500/60 text-amber-200 text-xs sm:text-sm flex items-start gap-3 text-left">
+            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold text-amber-300">Atenção: Possível Inscrição Duplicada</p>
+              <p className="text-amber-200/90 leading-relaxed">{duplicateWarning}</p>
+            </div>
+          </div>
+        )}
 
         {/* SUBMIT BUTTON */}
         <div className="pt-4">

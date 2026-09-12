@@ -22,6 +22,7 @@ import {
   EventSettings,
   Evaluation,
   AppUser,
+  CandidateAuditLog,
 } from '../types';
 import {
   INITIAL_SETTINGS,
@@ -41,6 +42,7 @@ const STORAGE_KEYS = {
   SETTINGS: 'tvls_configuracoes_v1',
   EVALUATIONS: 'tvls_avaliacoes_v1',
   USERS: 'tvls_usuarios_v1',
+  AUDIT_LOGS: 'tvls_auditoria_v1',
 };
 
 function getLocal<T>(key: string, defaultVal: T): T {
@@ -487,4 +489,139 @@ export async function deleteUser(uid: string): Promise<void> {
   const updated = current.filter((u) => u.uid !== uid);
   setLocal(STORAGE_KEYS.USERS, updated);
 }
+
+// ================= CONSULTA SEGURA (BI + CÓDIGO) =================
+
+export async function findCandidateByBiAndCode(biVal: string, codeVal: string): Promise<Candidate | null> {
+  const cleanBi = (biVal || '').trim().toUpperCase().replace(/\s+/g, '');
+  const cleanCode = (codeVal || '').trim().toUpperCase().replace(/\s+/g, '');
+
+  if (!cleanBi || !cleanCode) return null;
+
+  // 1. Tentar busca no Firestore
+  if (db && isConfigured) {
+    try {
+      const colRef = collection(db, 'candidatos');
+      // Busca pelo código
+      const qCode = query(colRef, where('codigoInscricao', '==', cleanCode), limit(1));
+      const snap = await getDocs(qCode);
+
+      if (!snap.empty) {
+        const found = snap.docs[0].data() as Candidate;
+        const candidateBi = (found.bi || '').trim().toUpperCase().replace(/\s+/g, '');
+        if (candidateBi === cleanBi) {
+          return {
+            ...found,
+            id: found.id || snap.docs[0].id,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore findCandidateByBiAndCode error:', err);
+    }
+  }
+
+  // 2. Fallback no cache local
+  const localCandidates = getLocal<Candidate[]>(STORAGE_KEYS.CANDIDATES, INITIAL_CANDIDATES);
+  const matched = localCandidates.find((c) => {
+    const cBi = (c.bi || '').trim().toUpperCase().replace(/\s+/g, '');
+    const cCode = (c.codigoInscricao || '').trim().toUpperCase().replace(/\s+/g, '');
+    return cBi === cleanBi && cCode === cleanCode;
+  });
+
+  return matched || null;
+}
+
+// ================= DETECÇÃO DE POSSÍVEIS DUPLICADOS =================
+
+export async function checkDuplicateCandidate(biVal: string, emailVal?: string): Promise<{ isDuplicate: boolean; reason?: string }> {
+  const cleanBi = (biVal || '').trim().toUpperCase().replace(/\s+/g, '');
+  const cleanEmail = (emailVal || '').trim().toLowerCase();
+
+  if (db && isConfigured) {
+    try {
+      const colRef = collection(db, 'candidatos');
+      if (cleanBi) {
+        const qBi = query(colRef, where('bi', '==', cleanBi), limit(1));
+        const snapBi = await getDocs(qBi);
+        if (!snapBi.empty) {
+          return {
+            isDuplicate: true,
+            reason: `Possível duplicação detectada: N.º de BI ${cleanBi} já possui registo no sistema.`,
+          };
+        }
+      }
+
+      if (cleanEmail) {
+        const qEmail = query(colRef, where('email', '==', cleanEmail), limit(1));
+        const snapEmail = await getDocs(qEmail);
+        if (!snapEmail.empty) {
+          return {
+            isDuplicate: true,
+            reason: `Possível duplicação detectada: Endereço de email ${cleanEmail} já registado.`,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('Firestore checkDuplicateCandidate check warning:', e);
+    }
+  }
+
+  // Fallback local
+  const localCandidates = getLocal<Candidate[]>(STORAGE_KEYS.CANDIDATES, INITIAL_CANDIDATES);
+  const foundBi = cleanBi ? localCandidates.find((c) => (c.bi || '').trim().toUpperCase().replace(/\s+/g, '') === cleanBi) : null;
+  if (foundBi) {
+    return {
+      isDuplicate: true,
+      reason: `Possível duplicação detectada: N.º de BI ${cleanBi} já possui registo anterior.`,
+    };
+  }
+
+  const foundEmail = cleanEmail ? localCandidates.find((c) => (c.email || '').trim().toLowerCase() === cleanEmail) : null;
+  if (foundEmail) {
+    return {
+      isDuplicate: true,
+      reason: `Possível duplicação detectada: Email ${cleanEmail} já registado.`,
+    };
+  }
+
+  return { isDuplicate: false };
+}
+
+// ================= AUDITORIA DE AÇÕES ADMINISTRATIVAS =================
+
+export async function fetchAuditLogs(): Promise<CandidateAuditLog[]> {
+  if (db && isConfigured) {
+    try {
+      const colRef = collection(db, 'auditoria');
+      const snap = await getDocs(colRef);
+      if (!snap.empty) {
+        const list = snap.docs.map((d) => d.data() as CandidateAuditLog);
+        list.sort((a, b) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime());
+        setLocal(STORAGE_KEYS.AUDIT_LOGS, list);
+        return list;
+      }
+    } catch (err) {
+      console.warn('Firestore fetchAuditLogs error:', err);
+    }
+  }
+
+  return getLocal<CandidateAuditLog[]>(STORAGE_KEYS.AUDIT_LOGS, []);
+}
+
+export async function saveAuditLog(log: CandidateAuditLog): Promise<void> {
+  if (db && isConfigured) {
+    try {
+      const docRef = doc(db, 'auditoria', log.id);
+      await setDoc(docRef, log, { merge: true });
+    } catch (err) {
+      console.warn('Firestore saveAuditLog error:', err);
+    }
+  }
+
+  const current = getLocal<CandidateAuditLog[]>(STORAGE_KEYS.AUDIT_LOGS, []);
+  current.unshift(log);
+  setLocal(STORAGE_KEYS.AUDIT_LOGS, current);
+}
+
 

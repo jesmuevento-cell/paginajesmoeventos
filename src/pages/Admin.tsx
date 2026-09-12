@@ -58,6 +58,8 @@ export const Admin: React.FC = () => {
     settings,
     paymentOrders,
     paymentMethods,
+    confirmCandidate,
+    rejectCandidate,
     updateCandidateStatus,
     submitEvaluation,
     deleteCandidate,
@@ -107,6 +109,8 @@ export const Admin: React.FC = () => {
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [newStatus, setNewStatus] = useState<CandidateStatus>('Recebida');
   const [adminNote, setAdminNote] = useState('');
+  const [actionJustification, setActionJustification] = useState('');
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   // Jury evaluation form state
   const [evalCandidate, setEvalCandidate] = useState<Candidate | null>(null);
@@ -452,35 +456,37 @@ export const Admin: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs Bar */}
+      {/* Tabs Bar with Role-Based Access Control */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3">
         {[
-          { id: 'overview', label: 'Visão Geral', icon: Sparkles },
-          { id: 'candidates', label: `Candidatos (${candidates.length})`, icon: Users },
-          { id: 'payments', label: `Pagamentos (${paymentOrders.length})`, icon: CreditCard },
-          { id: 'jury', label: 'Avaliações do Júri', icon: Award },
-          { id: 'news', label: 'Notícias & Imprensa', icon: Newspaper },
-          { id: 'stages', label: 'Etapas do Concurso', icon: Calendar },
-          { id: 'users', label: `Utilizadores (${registeredUsers.length + demoUsers.length})`, icon: UserCheck },
-          { id: 'settings', label: 'Configurações', icon: Settings },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-                isActive
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                  : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+          { id: 'overview', label: 'Visão Geral', icon: Sparkles, roles: ['Super Administrador', 'Administrador', 'Validador', 'Operador', 'Júri', 'Editor'] },
+          { id: 'candidates', label: `Candidatos (${candidates.length})`, icon: Users, roles: ['Super Administrador', 'Administrador', 'Validador', 'Operador', 'Júri'] },
+          { id: 'payments', label: `Pagamentos (${paymentOrders.length})`, icon: CreditCard, roles: ['Super Administrador', 'Administrador', 'Validador'] },
+          { id: 'jury', label: 'Avaliações do Júri', icon: Award, roles: ['Super Administrador', 'Administrador', 'Júri'] },
+          { id: 'news', label: 'Notícias & Imprensa', icon: Newspaper, roles: ['Super Administrador', 'Administrador', 'Editor'] },
+          { id: 'stages', label: 'Etapas do Concurso', icon: Calendar, roles: ['Super Administrador', 'Administrador'] },
+          { id: 'users', label: `Utilizadores (${registeredUsers.length + demoUsers.length})`, icon: UserCheck, roles: ['Super Administrador'] },
+          { id: 'settings', label: 'Configurações', icon: Settings, roles: ['Super Administrador', 'Administrador'] },
+        ]
+          .filter((tab) => !tab.roles || tab.roles.includes(user.papel))
+          .map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+                  isActive
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                    : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
       </div>
 
       {/* ------------------ TAB: OVERVIEW ------------------ */}
@@ -636,6 +642,7 @@ export const Admin: React.FC = () => {
                   className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
                 >
                   <option value="Todos">Todos os Estados</option>
+                  <option value="Pendente">Pendente</option>
                   <option value="Recebida">Recebida</option>
                   <option value="Em análise">Em análise</option>
                   <option value="Aprovada">Aprovada</option>
@@ -684,7 +691,7 @@ export const Admin: React.FC = () => {
                 <tr>
                   <th className="p-4">Candidato</th>
                   <th className="p-4">Código / BI</th>
-                  <th className="p-4">Município</th>
+                  <th className="p-4">Província / Município</th>
                   <th className="p-4">Género Musical</th>
                   <th className="p-4">Contacto</th>
                   <th className="p-4">Estado</th>
@@ -711,7 +718,10 @@ export const Admin: React.FC = () => {
                       <span className="font-mono font-bold text-sky-300 block">{c.codigoInscricao}</span>
                       <span className="text-[10px] text-slate-400 font-mono">{c.bi}</span>
                     </td>
-                    <td className="p-4 font-medium text-white">{c.municipio}</td>
+                    <td className="p-4 font-medium text-white">
+                      <span>{c.provincia || 'Lunda-Sul'}</span>
+                      <span className="text-[10px] text-slate-400 block">{c.municipio}</span>
+                    </td>
                     <td className="p-4">{c.generoMusical}</td>
                     <td className="p-4">
                       <span className="block text-white font-medium">{c.telefone}</span>
@@ -722,6 +732,8 @@ export const Admin: React.FC = () => {
                         className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
                           c.estado === 'Aprovada' || c.estado === 'Classificada' || c.estado === 'Pré-seleccionada'
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : c.estado === 'Pendente'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                             : c.estado === 'Eliminada' || c.estado === 'Rejeitado'
                             ? 'bg-red-500/20 text-red-300 border border-red-500/30'
                             : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
@@ -729,6 +741,11 @@ export const Admin: React.FC = () => {
                       >
                         {c.estado}
                       </span>
+                      {c.alertaDuplicado && (
+                        <span className="block mt-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          ⚠️ Possível duplicada
+                        </span>
+                      )}
                     </td>
                     <td className="p-4 text-right space-x-2">
                       <button
@@ -736,22 +753,25 @@ export const Admin: React.FC = () => {
                           setSelectedCandidate(c);
                           setNewStatus(c.estado);
                           setAdminNote(c.notasAdmin || '');
+                          setActionJustification('');
                         }}
                         className="px-3 py-1.5 rounded-lg bg-sky-600/20 text-sky-300 hover:bg-sky-600/40 font-semibold"
                       >
                         Gerir
                       </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Tem a certeza que deseja eliminar ${c.nomeArtistico}?`)) {
-                            deleteCandidate(c.id);
-                          }
-                        }}
-                        className="p-1.5 rounded-lg bg-red-950/40 text-red-400 hover:bg-red-900/60"
-                        title="Eliminar Inscrição"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {['Super Administrador', 'Administrador'].includes(user.papel) && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Tem a certeza que deseja eliminar ${c.nomeArtistico}?`)) {
+                              deleteCandidate(c.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg bg-red-950/40 text-red-400 hover:bg-red-900/60"
+                          title="Eliminar Inscrição"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -762,12 +782,24 @@ export const Admin: React.FC = () => {
           {/* Candidate Management Modal */}
           {selectedCandidate && (
             <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-slate-900 border border-sky-900/60 rounded-3xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto space-y-6">
+              <div className="bg-slate-900 border border-sky-900/60 rounded-3xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto space-y-6">
                 <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <UserCheck className="w-5 h-5 text-sky-400" />
-                    Gerir Candidato: {selectedCandidate.nomeArtistico}
-                  </h3>
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={selectedCandidate.fotoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80'}
+                      alt={selectedCandidate.nomeArtistico}
+                      className="w-12 h-12 rounded-2xl object-cover border border-sky-400 shrink-0"
+                    />
+                    <div>
+                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        {selectedCandidate.nomeArtistico}
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-sky-300 font-mono">
+                          {selectedCandidate.codigoInscricao}
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-400">{selectedCandidate.nomeCompleto}</p>
+                    </div>
+                  </div>
                   <button
                     onClick={() => setSelectedCandidate(null)}
                     className="text-slate-400 hover:text-white"
@@ -776,55 +808,235 @@ export const Admin: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div className="p-3 rounded-xl bg-slate-950">
-                    <span className="text-slate-400 block">Nome Completo:</span>
-                    <span className="text-white font-bold">{selectedCandidate.nomeCompleto}</span>
+                {/* Possível Duplicação Banner */}
+                {selectedCandidate.alertaDuplicado && (
+                  <div className="p-4 rounded-2xl bg-amber-950/60 border border-amber-500/60 text-amber-200 text-xs space-y-1">
+                    <strong className="text-amber-300 flex items-center gap-1.5 font-bold">
+                      <AlertCircle className="w-4 h-4 text-amber-400" />
+                      Sinalização de Auditoria: Possível Candidatura Duplicada — Verificar
+                    </strong>
+                    <p className="text-slate-300 leading-relaxed">
+                      {selectedCandidate.motivoAlertaDuplicado || 'Foram detectadas informações coincidentes com outra inscrição na base de dados.'}
+                    </p>
                   </div>
-                  <div className="p-3 rounded-xl bg-slate-950">
-                    <span className="text-slate-400 block">Código:</span>
-                    <span className="text-sky-300 font-mono font-bold">{selectedCandidate.codigoInscricao}</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-slate-950">
-                    <span className="text-slate-400 block">Idade:</span>
-                    <span className="text-white font-bold">{selectedCandidate.idade} anos</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-slate-950">
-                    <span className="text-slate-400 block">Município:</span>
-                    <span className="text-white font-bold">{selectedCandidate.municipio}</span>
-                  </div>
-                </div>
+                )}
 
-                {/* Status Update Form */}
+                {/* Resumo da Candidatura */}
                 <div className="space-y-3">
-                  <label className="text-xs font-bold text-white block">Actualizar Estado Oficial:</label>
-                  <select
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value as any)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
-                  >
-                    <option value="Recebida">Recebida</option>
-                    <option value="Em análise">Em análise</option>
-                    <option value="Aprovada">Aprovada</option>
-                    <option value="Pré-seleccionada">Pré-seleccionada</option>
-                    <option value="Classificada">Classificada</option>
-                    <option value="Eliminada">Eliminada</option>
-                  </select>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400">
+                    Resumo Completo da Candidatura
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">Bilhete de Identidade</span>
+                      <span className="text-white font-mono font-bold">{selectedCandidate.bi}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">Idade / Sexo</span>
+                      <span className="text-white font-bold">{selectedCandidate.idade} anos ({selectedCandidate.sexo})</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">Localização</span>
+                      <span className="text-white font-bold">{selectedCandidate.municipio}, {selectedCandidate.provincia || 'Lunda-Sul'}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">Contacto Telefónico</span>
+                      <span className="text-white font-bold">{selectedCandidate.telefone}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">WhatsApp</span>
+                      <span className="text-white font-bold">{selectedCandidate.whatsapp}</span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">Género Musical</span>
+                      <span className="text-sky-300 font-bold">{selectedCandidate.generoMusical}</span>
+                    </div>
+                  </div>
+
+                  {selectedCandidate.bairro && (
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">Bairro / Localidade:</span>
+                      <span className="text-slate-200">{selectedCandidate.bairro}</span>
+                    </div>
+                  )}
+
+                  {selectedCandidate.biografia && (
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1">
+                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">Biografia Artística:</span>
+                      <p className="text-slate-300 leading-relaxed">{selectedCandidate.biografia}</p>
+                    </div>
+                  )}
+
+                  {selectedCandidate.motivacao && (
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1">
+                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">Motivação para Participar:</span>
+                      <p className="text-slate-300 leading-relaxed">{selectedCandidate.motivacao}</p>
+                    </div>
+                  )}
+
+                  {selectedCandidate.audioVideoUrl && (
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs flex items-center justify-between">
+                      <span className="text-slate-400 text-[10px] uppercase font-semibold">Link de Apresentação Musical:</span>
+                      <a
+                        href={selectedCandidate.audioVideoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sky-400 hover:underline font-bold"
+                      >
+                        Abrir Link Externo ↗
+                      </a>
+                    </div>
+                  )}
                 </div>
 
-                {/* Note / Convocação */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-white block">
-                    Nota / Comunicado da Organização (Visível na Área do Candidato):
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Ex: Convocado para Audição no Pavilhão Multiusos a 15 de Outubro às 09h00..."
-                    value={adminNote}
-                    onChange={(e) => setAdminNote(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
-                  />
-                </div>
+                {/* CONFIRMAÇÃO & AVALIAÇÃO ADMINISTRATIVA (RBAC) */}
+                {user.papel === 'Operador' ? (
+                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-300 space-y-1.5">
+                    <strong className="text-sky-400 flex items-center gap-1.5 font-bold">
+                      <ShieldCheck className="w-4 h-4" />
+                      Perfil de Operador: Modo de Consulta & Apoio ao Candidato
+                    </strong>
+                    <p className="text-slate-400 leading-relaxed">
+                      Como operador, o seu acesso é exclusivo para atendimento, localização de inscrições e suporte às dúvidas do candidato. As decisões oficiais de validação, aprovação e exclusão são reservadas aos Validadores e à Comissão Organizadora.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="p-4 rounded-2xl bg-slate-950 border border-indigo-900/40 space-y-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4" />
+                        Decisão da Comissão Organizadora
+                      </h4>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-300 block">
+                          Observações / Justificativa da Decisão (Registado no Histórico):
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="Indique os motivos da confirmação ou rejeição da candidatura..."
+                          value={actionJustification}
+                          onChange={(e) => setActionJustification(e.target.value)}
+                          className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                        <button
+                          type="button"
+                          disabled={isProcessingAction}
+                          onClick={async () => {
+                            setIsProcessingAction(true);
+                            try {
+                              await confirmCandidate(
+                                selectedCandidate.id,
+                                {
+                                  uid: user?.id || 'admin',
+                                  nome: user?.nome || 'Administrador',
+                                  papel: user?.papel || 'Administrador',
+                                },
+                                actionJustification || 'Candidatura confirmada e aprovada pela comissão organizadora'
+                              );
+                              setSelectedCandidate(null);
+                            } finally {
+                              setIsProcessingAction(false);
+                            }
+                          }}
+                          className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/30"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>{isProcessingAction ? 'A Processar...' : 'Confirmar Candidatura'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={isProcessingAction}
+                          onClick={async () => {
+                            if (!actionJustification.trim()) {
+                              alert('Por favor indique o motivo / justificativa da rejeição antes de confirmar.');
+                              return;
+                            }
+                            setIsProcessingAction(true);
+                            try {
+                              await rejectCandidate(
+                                selectedCandidate.id,
+                                {
+                                  uid: user?.id || 'admin',
+                                  nome: user?.nome || 'Administrador',
+                                  papel: user?.papel || 'Administrador',
+                                },
+                                actionJustification
+                              );
+                              setSelectedCandidate(null);
+                            } finally {
+                              setIsProcessingAction(false);
+                            }
+                          }}
+                          className="px-5 py-2.5 rounded-xl bg-red-600/80 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-red-600/20"
+                        >
+                          <AlertCircle className="w-4 h-4" />
+                          <span>Rejeitar Candidatura</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Status Update & Note Manual Form */}
+                    <div className="space-y-3 border-t border-slate-800 pt-4">
+                      <label className="text-xs font-bold text-white block">Actualizar Outro Estado Oficial:</label>
+                      <div className="flex gap-2">
+                        <select
+                          value={newStatus}
+                          onChange={(e) => setNewStatus(e.target.value as any)}
+                          className="flex-1 px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
+                        >
+                          <option value="Pendente">Pendente</option>
+                          <option value="Recebida">Recebida</option>
+                          <option value="Em análise">Em análise</option>
+                          <option value="Aprovada">Aprovada</option>
+                          <option value="Pré-seleccionada">Pré-seleccionada</option>
+                          <option value="Classificada">Classificada</option>
+                          <option value="Eliminada">Eliminada</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await updateCandidateStatus(selectedCandidate.id, newStatus, adminNote);
+                            setSelectedCandidate(null);
+                          }}
+                          className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold"
+                        >
+                          Guardar Estado
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Histórico de Auditoria */}
+                {selectedCandidate.historicoAuditoria && selectedCandidate.historicoAuditoria.length > 0 && (
+                  <div className="space-y-2 border-t border-slate-800 pt-4">
+                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      Histórico de Auditoria da Candidatura
+                    </h5>
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                      {selectedCandidate.historicoAuditoria.map((item, idx) => {
+                        const author = item.adminNome || (item as any).autorNome || 'Administrador';
+                        const role = item.adminPapel || (item as any).autorPapel || 'Sistema';
+                        const detail = item.observacao || (item as any).detalhes || '';
+                        return (
+                          <div key={idx} className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 text-[11px] space-y-0.5">
+                            <div className="flex items-center justify-between text-slate-400">
+                              <span className="font-semibold text-slate-300">{author} ({role})</span>
+                              <span className="font-mono text-[10px]">{new Date(item.dataHora).toLocaleString('pt-AO')}</span>
+                            </div>
+                            <p className="text-white font-medium">{item.acao}{detail ? `: ${detail}` : ''}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                   <button
@@ -832,17 +1044,7 @@ export const Admin: React.FC = () => {
                     onClick={() => setSelectedCandidate(null)}
                     className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold"
                   >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await updateCandidateStatus(selectedCandidate.id, newStatus, adminNote);
-                      setSelectedCandidate(null);
-                    }}
-                    className="px-6 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold"
-                  >
-                    Guardar Alterações
+                    Fechar
                   </button>
                 </div>
               </div>
@@ -1564,10 +1766,12 @@ export const Admin: React.FC = () => {
                   onChange={(e) => setRegForm({ ...regForm, papel: e.target.value as UserRole })}
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-400"
                 >
+                  <option value="Super Administrador">Super Administrador (Director Geral)</option>
                   <option value="Administrador">Comissão Organizadora / Administrador</option>
+                  <option value="Validador">Validador (Validação de Inscrições e Pagamentos)</option>
+                  <option value="Operador">Operador (Apoio e Consulta ao Candidato)</option>
                   <option value="Júri">Membro do Júri Avaliador</option>
                   <option value="Editor">Comunicação, Redação & Imprensa</option>
-                  <option value="Super Administrador">Super Administrador (Director Geral)</option>
                 </select>
               </div>
 
