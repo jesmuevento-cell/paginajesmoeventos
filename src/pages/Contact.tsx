@@ -89,7 +89,7 @@ export const Contact: React.FC = () => {
                 <div>
                   <strong className="text-white block">Sede da Organização:</strong>
                   <span className="text-slate-300">
-                    {settings.contactos.localizacao}, {settings.contactos.municipio}, {settings.contactos.provincia}
+                    Mediateca de Saurimo, Saurimo, Lunda-Sul, Angola
                   </span>
                 </div>
               </div>

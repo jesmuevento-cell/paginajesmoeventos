@@ -622,30 +622,7 @@ export const CandidateArea: React.FC = () => {
         </>
       )}
 
-      {/* Helper Quick Search with Mock candidates */}
-      {!searched && (
-        <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 text-left space-y-3">
-          <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">
-            Exemplos para Teste Rápido de Consulta:
-          </span>
-          <div className="flex flex-wrap gap-2">
-            {candidates.slice(0, 4).map((c) => (
-              <button
-                key={c.id}
-                onClick={() => {
-                  setBiInput(c.bi);
-                  setCodigoInput(c.codigoInscricao);
-                  setCandidate(c);
-                  setSearched(true);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-slate-950 border border-sky-800/40 text-sky-300 hover:border-sky-400 text-xs font-mono font-bold transition-colors"
-              >
-                {c.codigoInscricao} ({c.nomeArtistico})
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+
 
       {/* Proof Submission Modal */}
       {isProofModalOpen && currentOrder && (
